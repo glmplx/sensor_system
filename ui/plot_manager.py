@@ -956,3 +956,59 @@ class PlotManager:
     def show(self):
         """Show the plot window"""
         plt.show()
+        
+    def set_close_callback(self, callback):
+        """
+        Configure a callback for when the window is closed via the X button
+        
+        Args:
+            callback: Function to call when the window is closed
+        """
+        # Get the window manager to connect to its close event
+        try:
+            if self.fig and self.fig.canvas and self.fig.canvas.manager:
+                manager = self.fig.canvas.manager
+                
+                # Determine the backend and connect appropriately
+                backend = plt.get_backend().lower()
+                
+                if 'qt' in backend:
+                    # For Qt backends
+                    window = manager.window
+                    if hasattr(window, 'closeEvent'):
+                        # Store original closeEvent
+                        original_close_event = window.closeEvent
+                        
+                        def new_close_event(event):
+                            # Run our callback first
+                            if callback:
+                                callback(event)
+                            # Then call the original handler
+                            original_close_event(event)
+                            
+                        window.closeEvent = new_close_event
+                        
+                elif 'tk' in backend:
+                    # For Tkinter backend
+                    if hasattr(manager, 'window'):
+                        window = manager.window
+                        window.protocol("WM_DELETE_WINDOW", callback)
+                        
+                elif 'wx' in backend:
+                    # For wxPython backend
+                    if hasattr(manager, 'frame'):
+                        import wx
+                        frame = manager.frame
+                        
+                        # Bind to EVT_CLOSE
+                        def on_close(event):
+                            callback(event)
+                            event.Skip()
+                            
+                        frame.Bind(wx.EVT_CLOSE, on_close)
+                
+                # Add fallback for other backends if needed
+                # Suppression du message de configuration du backend
+                
+        except Exception as e:
+            print(f"Could not set close callback: {e}")

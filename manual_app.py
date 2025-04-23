@@ -251,6 +251,16 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
     measure_res_temp_active = False  # This is the runtime state
     escape_pressed = False
     
+    # Function to handle window X button close event
+    def handle_window_close(event=None):
+        nonlocal escape_pressed
+        if not escape_pressed:  # Éviter une double fermeture
+            # Call the same quit function used by the quit button
+            quit_program(event)
+        
+    # Register the close handler
+    plot_manager.set_close_callback(handle_window_close)
+    
     # Initialize file state variables
     conductance_file_initialized = False
     co2_temp_humidity_file_initialized = False
@@ -500,28 +510,97 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         nonlocal escape_pressed
         # Définir Tcons à 0°C avant de fermer
         from core.constants import TCONS_LOW
-        measurements.set_Tcons(str(TCONS_LOW))
-        print(f"Tcons défini à {TCONS_LOW}°C avant fermeture")
+        try:
+            measurements.set_Tcons(str(TCONS_LOW))
+            print(f"Tcons défini à {TCONS_LOW}°C avant fermeture")
+        except Exception as e:
+            print(f"Erreur lors de la définition de Tcons: {e}")
+        
+        # Désactiver le flag de fonctionnement
         escape_pressed = True
         
-        # Fermer immédiatement, sans attendre la fin de la boucle principale
+        # Sauvegarder les données avant de fermer les connexions
+        try:
+            # Save data before exiting - only for active measurements
+            if (measure_conductance and measure_conductance_active) or \
+               (measure_co2 and measure_co2_temp_humidity_active) or \
+               (measure_regen and measure_res_temp_active):
+                print("Sauvegarde des données...")
+                saved = data_handler.save_all_data(measurements)
+                
+                # Proposer à l'utilisateur de renommer le dossier de données (même si pas de sauvegarde)
+                if hasattr(data_handler, 'test_folder_path') and data_handler.test_folder_path is not None:
+                    if saved:
+                        print(f"Les données ont été enregistrées dans: {data_handler.test_folder_path}")
+                    
+                    import tkinter as tk
+                    from tkinter import simpledialog
+                    
+                    # Créer une fenêtre Tkinter et la configurer pour être au premier plan
+                    root = tk.Tk()
+                    root.withdraw()  # Cacher la fenêtre principale
+                    root.attributes('-topmost', True)  # Mettre au premier plan
+                    
+                    # Obtenir le nom initial du dossier
+                    initial_folder_name = os.path.basename(data_handler.test_folder_path)
+                    
+                    # Afficher la boîte de dialogue pour le nouveau nom avec focus
+                    new_folder_name = simpledialog.askstring(
+                        "Renommer le dossier de données", 
+                        "Voulez-vous renommer le dossier de données ? (Laissez vide pour conserver le nom actuel)",
+                        initialvalue=initial_folder_name,
+                        parent=root  # Utiliser root comme parent pour hériter du topmost
+                    )
+                    
+                    # Si l'utilisateur a fourni un nom différent, renommer le dossier
+                    if new_folder_name and new_folder_name.strip() and new_folder_name.strip() != initial_folder_name:
+                        data_handler.rename_test_folder(new_folder_name.strip())
+                        print(f"Dossier renommé en: {new_folder_name.strip()}")
+            else:
+                print("Aucune donnée à sauvegarder")
+        except Exception as e:
+            print(f"Erreur lors de la sauvegarde des données: {e}")
+
         # Close all connections
-        if keithley is not None:
-            keithley.close()
-        if arduino_connected:
-            arduino.close()
-        if regen_connected:
-            regen.close()
+        print("Fermeture des connexions...")
+        try:
+            if keithley is not None:
+                keithley.close()
+            if arduino_connected:
+                arduino.close()
+            if regen_connected:
+                regen.close()
+        except Exception as e:
+            print(f"Erreur lors de la fermeture des connexions: {e}")
         
         # Fermeture de tous les graphiques
-        plot_manager.close()
+        try:
+            # Fermer proprement les threads matplotlib en arrière-plan
+            import matplotlib
+            matplotlib.pyplot.close('all')
+            
+            # Forcer la fermeture de toutes les figures matplotlib
+            plt.ioff()
+            plt.close('all')
+            
+            # Fermeture explicite du plot_manager
+            if plot_manager.fig is not None:
+                plt.close(plot_manager.fig)
+                plot_manager.fig = None
+            
+            # Fermer toutes les références aux traceurs pour libérer la mémoire
+            print("Fermeture de l'interface graphique...")
+            plot_manager.close()
+        except Exception as e:
+            print(f"Erreur lors de la fermeture des graphiques: {e}")
         
-        # Forcer la fermeture de toutes les figures matplotlib
-        plt.ioff()
-        plt.close('all')
+        # Forcer le ramasse-miettes Python pour libérer la mémoire
+        import gc
+        gc.collect()
         
         # Terminer l'exécution immédiatement
         import sys
+        print("Arrêt du programme")
         sys.exit(0)
     
     # Connect event handlers
@@ -672,61 +751,64 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         # Update UI - délai court pour une meilleure réactivité tout en donnant une chance au ramasse-miettes Python de libérer la mémoire
         plt.pause(0.01)
     
-    # Save data before exiting - only for active measurements
-    if measure_conductance or measure_co2 or measure_regen:
-        data_handler.save_all_data(measurements)
+    # Cette section n'est exécutée que si le programme termine naturellement
+    # sans passer par quit_program (ce qui est peu probable)
+    if escape_pressed:
+        print("Programme terminé via quit_program()")
+    else:
+        print("Programme terminé naturellement - sauvegarde des données")
+        # Save data before exiting - only for active measurements
+        if measure_conductance or measure_co2 or measure_regen:
+            data_handler.save_all_data(measurements)
+            
+            if hasattr(data_handler, 'test_folder_path') and data_handler.test_folder_path is not None:
+                print(f"Les données ont été enregistrées dans: {data_handler.test_folder_path}")
+                
+                # Proposer à l'utilisateur de renommer le dossier de données
+                import tkinter as tk
+                from tkinter import simpledialog
+                
+                root = tk.Tk()
+                root.withdraw()  # Cacher la fenêtre principale
+                
+                # Obtenir le nom initial du dossier
+                initial_folder_name = os.path.basename(data_handler.test_folder_path)
+                
+                # Afficher la boîte de dialogue pour le nouveau nom
+                new_folder_name = simpledialog.askstring(
+                    "Renommer le dossier de données", 
+                    "Voulez-vous renommer le dossier de données ? (Laissez vide pour conserver le nom actuel)",
+                    initialvalue=initial_folder_name
+                )
+                
+                # Si l'utilisateur a fourni un nom différent, renommer le dossier
+                if new_folder_name and new_folder_name.strip() and new_folder_name.strip() != initial_folder_name:
+                    data_handler.rename_test_folder(new_folder_name.strip())
+                    print(f"Dossier renommé en: {new_folder_name.strip()}")
         
-        # Proposer à l'utilisateur de renommer le dossier de données
-        import tkinter as tk
-        from tkinter import simpledialog
-        
-        root = tk.Tk()
-        root.withdraw()  # Cacher la fenêtre principale
-        
-        # Vérifier si le chemin du dossier de test existe avant de l'utiliser
-        initial_folder_name = ""
-        if hasattr(data_handler, 'test_folder_path') and data_handler.test_folder_path is not None:
-            initial_folder_name = os.path.basename(data_handler.test_folder_path)
-        
-        # Afficher la boîte de dialogue pour le nouveau nom
-        new_folder_name = simpledialog.askstring(
-            "Renommer le dossier de données", 
-            "Voulez-vous renommer le dossier de données ? (Laissez vide pour conserver le nom actuel)",
-            initialvalue=initial_folder_name
-        )
-        
-        # Si l'utilisateur a fourni un nom et que le dossier test existe, renommer le dossier
-        if new_folder_name and new_folder_name.strip() and hasattr(data_handler, 'test_folder_path') and data_handler.test_folder_path is not None:
-            if new_folder_name.strip() != initial_folder_name:
-                data_handler.rename_test_folder(new_folder_name.strip())
-                print(f"Dossier renommé en: {new_folder_name.strip()}")
+        # Close all connections if they haven't been closed yet
+        if keithley is not None and hasattr(keithley, 'device') and keithley.device is not None:
+            keithley.close()
+        if arduino_connected and hasattr(arduino, 'device') and arduino.device is not None:
+            arduino.close()
+        if regen_connected and hasattr(regen, 'device') and regen.device is not None:
+            regen.close()
     
-    # Close all connections
-    if keithley is not None:
-        keithley.close()
-    if arduino_connected:
-        arduino.close()
-    if regen_connected:
-        regen.close()
-    
-    # Forcer la fermeture de toutes les figures matplotlib
-    plt.ioff()
-    plt.close('all')
-    
-    # Fermer explicitement le plot_manager
-    if plot_manager.fig is not None:
-        plt.close(plot_manager.fig)
-    plot_manager.fig = None
+    # Nettoyer les ressources matplotlib et mémoire
+    # Ceci est exécuté dans tous les cas pour assurer un nettoyage complet
     
     # Fermer proprement les threads matplotlib en arrière-plan
-    # Utilisation de sys.exit() au lieu de os.kill qui est incorrect pour les threads Python
     import matplotlib
     matplotlib.pyplot.close('all')
     
-    # Fermer toutes les références aux traceurs pour libérer la mémoire
+    # Fermer explicitement le plot_manager si ce n'est pas déjà fait
+    if plot_manager is not None and plot_manager.fig is not None:
+        plt.close(plot_manager.fig)
+    
+    # Fermer toutes les références pour libérer la mémoire
     plot_manager = None
     
-    # Forcer le ramasse-miettes Python pour libérer la mémoire
+    # Forcer le ramasse-miettes Python
     import gc
     gc.collect()
     

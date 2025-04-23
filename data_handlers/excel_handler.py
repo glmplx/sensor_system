@@ -94,35 +94,40 @@ class ExcelHandler:
         # Create the appropriate file based on the type
         if file_type == "conductance":
             self.conductance_file = os.path.join(self.test_folder_path, f'conductance_{current_date}.xlsx')
-            # Create a workbook with the default sheet
-            wb = Workbook()
-            # Rename the default sheet to a temporary name
-            ws = wb.active
-            ws.title = "_temp"
-            wb.save(self.conductance_file)
-            return self.conductance_file
+            return self._create_workbook_with_info(self.conductance_file, file_type)
         
         elif file_type == "co2_temp_humidity":
             self.co2_temp_humidity_file = os.path.join(self.test_folder_path, f'co2_temp_humidity_{current_date}.xlsx')
-            # Create a workbook with the default sheet
-            wb = Workbook()
-            # Rename the default sheet to a temporary name
-            ws = wb.active
-            ws.title = "_temp"
-            wb.save(self.co2_temp_humidity_file)
-            return self.co2_temp_humidity_file
+            return self._create_workbook_with_info(self.co2_temp_humidity_file, file_type)
         
         elif file_type == "temp_res":
             self.temp_res_file = os.path.join(self.test_folder_path, f'temperature_resistance_{current_date}.xlsx')
-            # Create a workbook with the default sheet
-            wb = Workbook()
-            # Rename the default sheet to a temporary name
-            ws = wb.active
-            ws.title = "_temp"
-            wb.save(self.temp_res_file)
-            return self.temp_res_file
+            return self._create_workbook_with_info(self.temp_res_file, file_type)
         
         return None
+        
+    def _create_workbook_with_info(self, file_path, file_type):
+        """
+        Crée un classeur Excel sans feuille initiale
+        
+        Args:
+            file_path: Chemin du fichier à créer
+            file_type: Type de fichier (non utilisé)
+            
+        Returns:
+            str: Chemin du fichier créé
+        """
+        # Create a workbook with the default sheet
+        wb = Workbook()
+        
+        # Garder la feuille par défaut mais la renommer avec un nom temporaire
+        # Cette feuille sera ensuite supprimée lors de l'ajout de vraies données
+        ws = wb.active
+        ws.title = "_temp"
+        
+        # Sauvegarder le classeur vide
+        wb.save(file_path)
+        return file_path
     
     def add_sheet_to_excel(self, file_path, sheet_name, data):
         """
@@ -136,9 +141,22 @@ class ExcelHandler:
         Returns:
             bool: True if the sheet was added successfully, False otherwise
         """
+        if not os.path.exists(file_path):
+            print(f"Erreur: Le fichier {file_path} n'existe pas")
+            return False
+            
+        if not data or not any(len(v) > 0 for v in data.values()):
+            print(f"Avertissement: Aucune donnée à enregistrer dans {sheet_name}")
+            return False
+            
         try:
             # Check if we need to replace an existing "Essais cumulés" sheet
             wb = load_workbook(file_path)
+            # Ne pas ajouter de feuille Essais cumulés si les données sont vides
+            if sheet_name == "Essais cumulés" and not data:
+                return False
+                
+            # Remplacer la feuille Essais cumulés si elle existe déjà
             if sheet_name == "Essais cumulés" and sheet_name in wb.sheetnames:
                 # Remove the existing sheet first
                 cumul_sheet = wb[sheet_name]
@@ -156,7 +174,6 @@ class ExcelHandler:
                 temp_sheet = wb["_temp"]
                 wb.remove(temp_sheet)
                 wb.save(file_path)
-                
             return True
         except Exception as e:
             print(f"Error adding sheet to Excel file: {e}")
@@ -321,19 +338,25 @@ class ExcelHandler:
         Returns:
             bool: True if all data was saved successfully, False otherwise
         """
-        success = True
+        success = False  # Commence à False, met à True uniquement si des données ont été sauvegardées
+        any_data_saved = False
         
         # Save conductance data
-        if measurement_manager.timeList:
+        if measurement_manager.timeList and len(measurement_manager.timeList) > 0:
             result = self.save_conductance_data(
                 measurement_manager.timeList,
                 measurement_manager.conductanceList,
                 measurement_manager.resistanceList
             )
-            success = success and result
+            success = result
+            any_data_saved = any_data_saved or result
         
         # Save CO2, temperature and humidity data
-        if measurement_manager.timestamps_co2 or measurement_manager.timestamps_temp or measurement_manager.timestamps_humidity:
+        has_co2_data = (measurement_manager.timestamps_co2 and len(measurement_manager.timestamps_co2) > 0)
+        has_temp_data = (measurement_manager.timestamps_temp and len(measurement_manager.timestamps_temp) > 0)
+        has_humidity_data = (measurement_manager.timestamps_humidity and len(measurement_manager.timestamps_humidity) > 0)
+        
+        if has_co2_data or has_temp_data or has_humidity_data:
             result = self.save_co2_temp_humidity_data(
                 measurement_manager.timestamps_co2,
                 measurement_manager.values_co2,
@@ -343,20 +366,23 @@ class ExcelHandler:
                 measurement_manager.values_humidity
             )
             success = success and result
+            any_data_saved = any_data_saved or result
         
         # Save temperature and resistance data
-        if measurement_manager.timestamps_res_temp:
+        if measurement_manager.timestamps_res_temp and len(measurement_manager.timestamps_res_temp) > 0:
             result = self.save_temp_res_data(
                 measurement_manager.timestamps_res_temp,
                 measurement_manager.temperatures,
                 measurement_manager.Tcons_values
             )
             success = success and result
+            any_data_saved = any_data_saved or result
         
-        if success:
+        if any_data_saved:
             print(f"All data saved successfully to {self.test_folder_path}")
         else:
-            print("Error saving some data")
+            print("Aucune donnée à sauvegarder")
+            success = False
         
         return success
         
