@@ -9,6 +9,7 @@ import os
 import signal
 import threading
 import matplotlib.pyplot as plt
+from datetime import datetime
 
 from devices.keithley_device import KeithleyDevice
 from devices.arduino_device import ArduinoDevice
@@ -293,27 +294,27 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         previous_state = measure_conductance_active
         measure_conductance_active = not measure_conductance_active
         
-        # Si on initialise la mesure pour la première fois
+        # Initialiser le fichier si nécessaire
         if measure_conductance_active and not conductance_file_initialized:
             data_handler.initialize_file("conductance")
             conductance_file_initialized = True
-            
-        # Si on met en pause (passage de True à False)
-        if previous_state and not measure_conductance_active:
-            # Enregistrer le temps d'arrêt pour plus tard
-            current_time = time.time()
-            if measurements.start_time_conductance is not None:
-                measurements.pause_time_conductance = current_time
         
-        # Si on reprend après pause (passage de False à True)
+        # Si on arrête la mesure (passage de True à False)
+        if previous_state and not measure_conductance_active:
+            # Sauvegarder les données courantes
+            if measurements.timeList and len(measurements.timeList) > 0:
+                data_handler.save_conductance_data(
+                    measurements.timeList,
+                    measurements.conductanceList,
+                    measurements.resistanceList
+                )
+        
+        # Si on reprend après pause
         if not previous_state and measure_conductance_active and measurements.pause_time_conductance is not None:
-            # Calculer combien de temps s'est écoulé depuis la pause
             current_time = time.time()
             pause_duration = current_time - measurements.pause_time_conductance
-            # Ajouter cette durée au temps d'offset pour ajuster les timestamps
             measurements.elapsed_time_conductance += pause_duration
-            
-        # Update UI
+        
         plot_manager.update_raz_buttons_visibility({'conductance': measure_conductance_active})
     
     def toggle_co2_temp_humidity(event):
@@ -321,30 +322,33 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         previous_state = measure_co2_temp_humidity_active
         measure_co2_temp_humidity_active = not measure_co2_temp_humidity_active
         
-        # Si on initialise la mesure pour la première fois
+        # Initialiser le fichier si nécessaire
         if measure_co2_temp_humidity_active and not co2_temp_humidity_file_initialized:
             data_handler.initialize_file("co2_temp_humidity")
             co2_temp_humidity_file_initialized = True
-            
-        # Si on met en pause (passage de True à False)
-        if previous_state and not measure_co2_temp_humidity_active:
-            # Enregistrer le temps d'arrêt pour plus tard
-            current_time = time.time()
-            if measurements.start_time_co2_temp_humidity is not None:
-                measurements.pause_time_co2_temp_humidity = current_time
         
-        # Si on reprend après pause (passage de False à True)
+        # Si on arrête la mesure (passage de True à False)
+        if previous_state and not measure_co2_temp_humidity_active:
+            # Sauvegarder les données courantes
+            if (measurements.timestamps_co2 and len(measurements.timestamps_co2) > 0) or \
+            (measurements.timestamps_temp and len(measurements.timestamps_temp) > 0) or \
+            (measurements.timestamps_humidity and len(measurements.timestamps_humidity) > 0):
+                data_handler.save_co2_temp_humidity_data(
+                    measurements.timestamps_co2,
+                    measurements.values_co2,
+                    measurements.timestamps_temp,
+                    measurements.values_temp,
+                    measurements.timestamps_humidity,
+                    measurements.values_humidity
+                )
+        
+        # Si on reprend après pause
         if not previous_state and measure_co2_temp_humidity_active and measurements.pause_time_co2_temp_humidity is not None:
-            # Calculer combien de temps s'est écoulé depuis la pause
             current_time = time.time()
             pause_duration = current_time - measurements.pause_time_co2_temp_humidity
-            # Ajouter cette durée au temps d'offset pour ajuster les timestamps
             measurements.elapsed_time_co2_temp_humidity += pause_duration
-            
-        # Update UI
-        plot_manager.update_raz_buttons_visibility({'co2_temp_humidity': measure_co2_temp_humidity_active})
         
-        # Vérifier si le bouton de régénération doit être activé (CO2 et Tcons/Tmes actifs)
+        plot_manager.update_raz_buttons_visibility({'co2_temp_humidity': measure_co2_temp_humidity_active})
         update_regeneration_button_state()
     
     def toggle_res_temp(event):
@@ -352,30 +356,28 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         previous_state = measure_res_temp_active
         measure_res_temp_active = not measure_res_temp_active
         
-        # Si on initialise la mesure pour la première fois
+        # Initialiser le fichier si nécessaire
         if measure_res_temp_active and not temp_res_file_initialized:
             data_handler.initialize_file("temp_res")
             temp_res_file_initialized = True
-            
-        # Si on met en pause (passage de True à False)
-        if previous_state and not measure_res_temp_active:
-            # Enregistrer le temps d'arrêt pour plus tard
-            current_time = time.time()
-            if measurements.start_time_res_temp is not None:
-                measurements.pause_time_res_temp = current_time
         
-        # Si on reprend après pause (passage de False à True)
+        # Si on arrête la mesure (passage de True à False)
+        if previous_state and not measure_res_temp_active:
+            # Sauvegarder les données courantes
+            if measurements.timestamps_res_temp and len(measurements.timestamps_res_temp) > 0:
+                data_handler.save_temp_res_data(
+                    measurements.timestamps_res_temp,
+                    measurements.temperatures,
+                    measurements.Tcons_values
+                )
+        
+        # Si on reprend après pause
         if not previous_state and measure_res_temp_active and measurements.pause_time_res_temp is not None:
-            # Calculer combien de temps s'est écoulé depuis la pause
             current_time = time.time()
             pause_duration = current_time - measurements.pause_time_res_temp
-            # Ajouter cette durée au temps d'offset pour ajuster les timestamps
             measurements.elapsed_time_res_temp += pause_duration
-            
-        # Update UI
-        plot_manager.update_raz_buttons_visibility({'res_temp': measure_res_temp_active})
         
-        # Vérifier si le bouton de régénération doit être activé (CO2 et Tcons/Tmes actifs)
+        plot_manager.update_raz_buttons_visibility({'res_temp': measure_res_temp_active})
         update_regeneration_button_state()
         
     def update_regeneration_button_state():
@@ -404,16 +406,15 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
             regeneration_button.ax.figure.canvas.draw_idle()
     
     def raz_conductance(event):
-        # Sauvegarder uniquement s'il y a des données à sauvegarder
-        if len(measurements.timeList) > 0:
-            data_handler.save_conductance_data(
+        # Préparer les données pour l'essai cumulé sans créer de nouvelle feuille
+        if measurements.timeList and len(measurements.timeList) > 0:
+            data_handler.raz_conductance_data(
                 measurements.timeList,
                 measurements.conductanceList,
                 measurements.resistanceList
             )
-            # Ne pas réinitialiser les données accumulées pour garder l'historique
-            # Les temps sont ajustés automatiquement dans save_conductance_data
         
+        # Réinitialiser les données courantes
         measurements.reset_data("conductance")
         measurements.reset_data("detection")
         
@@ -421,9 +422,11 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         plot_manager.update_detection_indicators(False, False)
     
     def raz_co2_temp_humidity(event):
-        # Sauvegarder uniquement s'il y a des données à sauvegarder
-        if len(measurements.timestamps_co2) > 0 or len(measurements.timestamps_temp) > 0 or len(measurements.timestamps_humidity) > 0:
-            data_handler.save_co2_temp_humidity_data(
+        # Préparer les données pour l'essai cumulé
+        if (measurements.timestamps_co2 and len(measurements.timestamps_co2) > 0) or \
+        (measurements.timestamps_temp and len(measurements.timestamps_temp) > 0) or \
+        (measurements.timestamps_humidity and len(measurements.timestamps_humidity) > 0):
+            data_handler.raz_co2_temp_humidity_data(
                 measurements.timestamps_co2,
                 measurements.values_co2,
                 measurements.timestamps_temp,
@@ -431,26 +434,22 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                 measurements.timestamps_humidity,
                 measurements.values_humidity
             )
-            # Ne pas réinitialiser les données accumulées pour garder l'historique
-            # Les temps sont ajustés automatiquement dans save_co2_temp_humidity_data
         
+        # Réinitialiser les données courantes
         measurements.reset_data("co2_temp_humidity")
-        
         plot_manager.update_co2_temp_humidity_plot([], [], [], [], [], [])
     
     def raz_res_temp(event):
-        # Sauvegarder uniquement s'il y a des données à sauvegarder
-        if len(measurements.timestamps_res_temp) > 0:
-            data_handler.save_temp_res_data(
+        # Préparer les données pour l'essai cumulé
+        if measurements.timestamps_res_temp and len(measurements.timestamps_res_temp) > 0:
+            data_handler.raz_temp_res_data(
                 measurements.timestamps_res_temp,
                 measurements.temperatures,
                 measurements.Tcons_values
             )
-            # Ne pas réinitialiser les données accumulées pour garder l'historique
-            # Les temps sont ajustés automatiquement dans save_temp_res_data
         
+        # Réinitialiser les données courantes
         measurements.reset_data("res_temp")
-        
         plot_manager.update_res_temp_plot([], [], [])
     
     def set_R0(event):
@@ -540,21 +539,64 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                 data_handler.temp_res_file is not None
             )
             
-            # Save data before exiting - only for active measurements
-            if (measure_conductance and measure_conductance_active) or \
-               (measure_co2 and measure_co2_temp_humidity_active) or \
-               (measure_regen and measure_res_temp_active):
-                print("Sauvegarde des données...")
-                saved = data_handler.save_all_data(measurements)
-            else:
-                saved = False
-                if files_initialized:
-                    print("Mesures arrêtées - aucune sauvegarde supplémentaire nécessaire")
+            # Sauvegarder les données si elles sont en cours d'acquisition
+            if measure_conductance_active and measurements.timeList and len(measurements.timeList) > 0:
+                print("Sauvegarde des données de conductance avant fermeture...")
+                sheet_name = f"Cond_{datetime.now().strftime('%H%M%S')}"
+                data_handler.save_conductance_data(
+                    measurements.timeList,
+                    measurements.conductanceList,
+                    measurements.resistanceList
+                )
+                
+            if measure_co2_temp_humidity_active and ((measurements.timestamps_co2 and len(measurements.timestamps_co2) > 0) or \
+               (measurements.timestamps_temp and len(measurements.timestamps_temp) > 0) or \
+               (measurements.timestamps_humidity and len(measurements.timestamps_humidity) > 0)):
+                print("Sauvegarde des données CO2/temp/humidity avant fermeture...")
+                sheet_name = f"CO2_{datetime.now().strftime('%H%M%S')}"
+                data_handler.save_co2_temp_humidity_data(
+                    measurements.timestamps_co2,
+                    measurements.values_co2,
+                    measurements.timestamps_temp,
+                    measurements.values_temp,
+                    measurements.timestamps_humidity,
+                    measurements.values_humidity
+                )
+                
+            if measure_res_temp_active and measurements.timestamps_res_temp and len(measurements.timestamps_res_temp) > 0:
+                print("Sauvegarde des données temp/resistance avant fermeture...")
+                sheet_name = f"Temp_{datetime.now().strftime('%H%M%S')}"
+                data_handler.save_temp_res_data(
+                    measurements.timestamps_res_temp,
+                    measurements.temperatures,
+                    measurements.Tcons_values
+                )
+                
+            # Forcer la création des feuilles cumulées pour tous les fichiers initialisés
+            if data_handler.conductance_file and data_handler.conductance_series_count >= 2:
+                print("Création de la feuille 'Essais cumulés' pour conductance...")
+                data_handler._update_cumulative_sheet(data_handler.conductance_file)
+                
+            if data_handler.co2_temp_humidity_file and data_handler.co2_temp_humidity_series_count >= 2:
+                print("Création de la feuille 'Essais cumulés' pour CO2/temp/humidity...")
+                data_handler._update_cumulative_sheet(data_handler.co2_temp_humidity_file)
+                
+            if data_handler.temp_res_file and data_handler.temp_res_series_count >= 2:
+                print("Création de la feuille 'Essais cumulés' pour temp/resistance...")
+                data_handler._update_cumulative_sheet(data_handler.temp_res_file)
+                
+            # Ajouter les graphiques aux fichiers Excel
+            if files_initialized:
+                if data_handler.conductance_file:
+                    data_handler.add_charts_to_excel(data_handler.conductance_file)
+                if data_handler.co2_temp_humidity_file:
+                    data_handler.add_charts_to_excel(data_handler.co2_temp_humidity_file)
+                if data_handler.temp_res_file:
+                    data_handler.add_charts_to_excel(data_handler.temp_res_file)
                 
             # Proposer à l'utilisateur de renommer le dossier de données si des fichiers ont été initialisés
             if files_initialized and hasattr(data_handler, 'test_folder_path') and data_handler.test_folder_path is not None:
-                if saved:
-                    print(f"Les données ont été enregistrées dans: {data_handler.test_folder_path}")
+                print(f"Les données ont été enregistrées dans: {data_handler.test_folder_path}")
                 
                 import tkinter as tk
                 from tkinter import simpledialog
@@ -780,19 +822,81 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         print("Programme terminé via quit_program()")
     else:
         print("Programme terminé naturellement - sauvegarde des données")
-        # Save data before exiting - only for active measurements
-        if measure_conductance or measure_co2 or measure_regen:
-            data_handler.save_all_data(measurements)
+        
+        # Sauvegarder les données avant de fermer les connexions
+        try:
+            # Vérifier si des fichiers ont été initialisés (même si les mesures sont arrêtées)
+            files_initialized = (
+                data_handler.conductance_file is not None or
+                data_handler.co2_temp_humidity_file is not None or
+                data_handler.temp_res_file is not None
+            )
             
-            if hasattr(data_handler, 'test_folder_path') and data_handler.test_folder_path is not None:
+            # Sauvegarder les données si elles sont en cours d'acquisition
+            if measure_conductance_active and measurements.timeList and len(measurements.timeList) > 0:
+                print("Sauvegarde des données de conductance avant fermeture...")
+                sheet_name = f"Cond_{datetime.now().strftime('%H%M%S')}"
+                data_handler.save_conductance_data(
+                    measurements.timeList,
+                    measurements.conductanceList,
+                    measurements.resistanceList
+                )
+                
+            if measure_co2_temp_humidity_active and ((measurements.timestamps_co2 and len(measurements.timestamps_co2) > 0) or \
+               (measurements.timestamps_temp and len(measurements.timestamps_temp) > 0) or \
+               (measurements.timestamps_humidity and len(measurements.timestamps_humidity) > 0)):
+                print("Sauvegarde des données CO2/temp/humidity avant fermeture...")
+                sheet_name = f"CO2_{datetime.now().strftime('%H%M%S')}"
+                data_handler.save_co2_temp_humidity_data(
+                    measurements.timestamps_co2,
+                    measurements.values_co2,
+                    measurements.timestamps_temp,
+                    measurements.values_temp,
+                    measurements.timestamps_humidity,
+                    measurements.values_humidity
+                )
+                
+            if measure_res_temp_active and measurements.timestamps_res_temp and len(measurements.timestamps_res_temp) > 0:
+                print("Sauvegarde des données temp/resistance avant fermeture...")
+                sheet_name = f"Temp_{datetime.now().strftime('%H%M%S')}"
+                data_handler.save_temp_res_data(
+                    measurements.timestamps_res_temp,
+                    measurements.temperatures,
+                    measurements.Tcons_values
+                )
+                
+            # Forcer la création des feuilles cumulées pour tous les fichiers initialisés
+            if data_handler.conductance_file and data_handler.conductance_series_count >= 2:
+                print("Création de la feuille 'Essais cumulés' pour conductance...")
+                data_handler._update_cumulative_sheet(data_handler.conductance_file)
+                
+            if data_handler.co2_temp_humidity_file and data_handler.co2_temp_humidity_series_count >= 2:
+                print("Création de la feuille 'Essais cumulés' pour CO2/temp/humidity...")
+                data_handler._update_cumulative_sheet(data_handler.co2_temp_humidity_file)
+                
+            if data_handler.temp_res_file and data_handler.temp_res_series_count >= 2:
+                print("Création de la feuille 'Essais cumulés' pour temp/resistance...")
+                data_handler._update_cumulative_sheet(data_handler.temp_res_file)
+            
+            # Ajouter les graphiques aux fichiers Excel
+            if files_initialized:
+                if data_handler.conductance_file:
+                    data_handler.add_charts_to_excel(data_handler.conductance_file)
+                if data_handler.co2_temp_humidity_file:
+                    data_handler.add_charts_to_excel(data_handler.co2_temp_humidity_file)
+                if data_handler.temp_res_file:
+                    data_handler.add_charts_to_excel(data_handler.temp_res_file)
+            
+            # Proposer à l'utilisateur de renommer le dossier de données
+            if files_initialized and hasattr(data_handler, 'test_folder_path') and data_handler.test_folder_path is not None:
                 print(f"Les données ont été enregistrées dans: {data_handler.test_folder_path}")
                 
-                # Proposer à l'utilisateur de renommer le dossier de données
                 import tkinter as tk
                 from tkinter import simpledialog
                 
                 root = tk.Tk()
                 root.withdraw()  # Cacher la fenêtre principale
+                root.attributes('-topmost', True)  # Mettre au premier plan
                 
                 # Obtenir le nom initial du dossier
                 initial_folder_name = os.path.basename(data_handler.test_folder_path)
@@ -801,14 +905,17 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                 new_folder_name = simpledialog.askstring(
                     "Renommer le dossier de données", 
                     "Voulez-vous renommer le dossier de données ? (Laissez vide pour conserver le nom actuel)",
-                    initialvalue=initial_folder_name
+                    initialvalue=initial_folder_name,
+                    parent=root  # Utiliser root comme parent pour hériter du topmost
                 )
                 
                 # Si l'utilisateur a fourni un nom différent, renommer le dossier
                 if new_folder_name and new_folder_name.strip() and new_folder_name.strip() != initial_folder_name:
                     data_handler.rename_test_folder(new_folder_name.strip())
                     print(f"Dossier renommé en: {new_folder_name.strip()}")
-        
+        except Exception as e:
+            print(f"Erreur lors de la sauvegarde des données: {e}")
+            
         # Close all connections if they haven't been closed yet
         if keithley is not None and hasattr(keithley, 'device') and keithley.device is not None:
             keithley.close()

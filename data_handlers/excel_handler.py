@@ -7,6 +7,8 @@ import sys
 import pandas as pd
 from datetime import datetime
 from openpyxl import Workbook, load_workbook
+from openpyxl.chart import LineChart, Reference
+from openpyxl.chart.axis import DateAxis
 
 # Ajout du répertoire parent au path pour résoudre les importations
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -46,7 +48,9 @@ class ExcelHandler:
             'Temps (s)': [],
             'CO2 (ppm)': [],
             'Température (°C)': [],
-            'Humidité (%)': []
+            'Humidité (%)': [],
+            'deltaC (ppm)': [],
+            'masseC (µg)': []
         }
         
         self.accumulated_temp_res_data = {
@@ -136,118 +140,156 @@ class ExcelHandler:
         # Sauvegarder le classeur vide
         wb.save(file_path)
         return file_path
+        
     
     def add_sheet_to_excel(self, file_path, sheet_name, data):
-        """
-        Add a new sheet to an Excel file
-        
-        Args:
-            file_path: Path to the Excel file
-            sheet_name: Name of the sheet to add
-            data: Dictionary of column names and values
-            
-        Returns:
-            bool: True if the sheet was added successfully, False otherwise
-        """
         if not os.path.exists(file_path):
             print(f"Erreur: Le fichier {file_path} n'existe pas")
             return False
             
-        if not data or not any(len(v) > 0 for v in data.values()):
-            # Remove the sheet if it exists and we have no data
-            try:
-                wb = load_workbook(file_path)
-                if sheet_name in wb.sheetnames:
-                    wb.remove(wb[sheet_name])
-                    wb.save(file_path)
-                return False
-            except Exception as e:
-                print(f"Error removing empty sheet: {e}")
-                return False
-            
         try:
-            # Charger le classeur
             wb = load_workbook(file_path)
             
-            # Ne pas ajouter de feuille Essais cumulés si les données sont vides
-            if sheet_name == "Essais cumulés" and not data:
-                return False
-            
-            # Pour les feuilles normales, vérifier si elles existent déjà et les remplacer
-            if sheet_name in wb.sheetnames:
-                existing_sheet = wb[sheet_name]
-                wb.remove(existing_sheet)
-                wb.save(file_path)
-            
-            # Write our data to the Excel file
-            with pd.ExcelWriter(file_path, engine='openpyxl', mode='a') as writer:
-                df = pd.DataFrame(data)
-                df.to_excel(writer, sheet_name=sheet_name, index=False)
-            
-            # Now remove the temporary sheet if it exists
-            wb = load_workbook(file_path)
+            # Supprimer la feuille temporaire si elle existe
             if "_temp" in wb.sheetnames:
-                temp_sheet = wb["_temp"]
-                wb.remove(temp_sheet)
-                wb.save(file_path)
+                wb.remove(wb["_temp"])
+            
+            # Vérifier si la feuille existe déjà
+            if sheet_name in wb.sheetnames:
+                print(f"La feuille {sheet_name} existe déjà - pas de duplication")
+                return True
                 
-            # Compte le nombre de feuilles de données (excluant _temp et Essais cumulés)
-            data_sheet_count = 0
-            for s in wb.sheetnames:
-                if s != "_temp" and s != "Essais cumulés":
-                    data_sheet_count += 1
+            # Créer la nouvelle feuille seulement si elle n'existe pas
+            ws = wb.create_sheet(sheet_name)
+            for col_num, (key, values) in enumerate(data.items(), 1):
+                ws.cell(row=1, column=col_num, value=key)
+                for row_num, value in enumerate(values, 2):
+                    ws.cell(row=row_num, column=col_num, value=value)
             
-            # Si on a plus de 2 feuilles d'essais, créer automatiquement une feuille "Essais cumulés"
-            # La feuille "Essais cumulés" sera mise à jour par les méthodes save_xxx_data
+            # Mettre à jour "Essais cumulés" si nécessaire
+            if self._should_create_cumulative_sheet(file_path):
+                self._update_cumulative_sheet(file_path)
             
+            wb.save(file_path)
             return True
         except Exception as e:
             print(f"Error adding sheet to Excel file: {e}")
             return False
+        
+    def _update_cumulative_sheet(self, file_path):
+        """
+        Met à jour ou crée la feuille 'Essais cumulés' de manière plus robuste
+        """
+        try:
+            # Déterminer le type de données basé sur le nom du fichier
+            file_type = None
+            if "conductance" in os.path.basename(file_path).lower():
+                cumulative_data = self.accumulated_conductance_data
+                required_fields = ['Minutes', 'Temps (s)', 'Conductance (µS)', 'Resistance (Ohms)']
+                series_count = self.conductance_series_count
+                file_type = "conductance"
+            elif "co2_temp_humidity" in os.path.basename(file_path).lower():
+                cumulative_data = self.accumulated_co2_temp_humidity_data
+                required_fields = ['Minutes', 'Temps (s)', 'CO2 (ppm)', 'Température (°C)', 'Humidité (%)']
+                series_count = self.co2_temp_humidity_series_count
+                file_type = "co2_temp_humidity"
+            elif "temperature_resistance" in os.path.basename(file_path).lower():
+                cumulative_data = self.accumulated_temp_res_data
+                required_fields = ['Minutes', 'Temps (s)', 'Température mesurée', 'Tcons']
+                series_count = self.temp_res_series_count
+                file_type = "temp_res"
+            else:
+                return
+                
+            # Vérifier que nous avons des données accumulées valides
+            has_cumulative_data = all(key in cumulative_data for key in required_fields)
+            has_cumulative_data &= any(len(cumulative_data[key]) > 0 for key in required_fields)
+            
+            if not has_cumulative_data:
+                return
+                
+            # Ne créer la feuille "Essais cumulés" que s'il y a plus d'une série de mesures
+            if series_count < 2:
+                return
+                
+            # Charger le fichier Excel
+            wb = load_workbook(file_path)
+            
+            # Supprimer l'ancienne feuille "Essais cumulés" si elle existe
+            if "Essais cumulés" in wb.sheetnames:
+                wb.remove(wb["Essais cumulés"])
+            
+            # Créer la nouvelle feuille "Essais cumulés"
+            ws = wb.create_sheet("Essais cumulés")
+            
+            # Écrire les en-têtes
+            for col_num, header in enumerate(required_fields, 1):
+                ws.cell(row=1, column=col_num, value=header)
+            
+            # Écrire les données
+            max_rows = max(len(cumulative_data[key]) for key in required_fields)
+            
+            for row_num in range(max_rows):
+                for col_num, key in enumerate(required_fields, 1):
+                    if row_num < len(cumulative_data[key]):
+                        ws.cell(row=row_num+2, column=col_num, value=cumulative_data[key][row_num])
+            
+            # Sauvegarder les modifications
+            wb.save(file_path)
+            
+        except Exception as e:
+            print(f"Erreur lors de la mise à jour de la feuille cumulée: {e}", exc_info=True)
+    
+    def raz_co2_temp_humidity_data(self, co2_timestamps, co2_values, temp_timestamps, temp_values, humidity_timestamps, humidity_values):
+        """Prépare les données CO2/temp/humidity pour un nouvel essai"""
+        if co2_timestamps and len(co2_timestamps) > 0:
+            # Ajouter aux données accumulées sans créer de nouvelle feuille
+            lastTime = 0
+            if self.accumulated_co2_temp_humidity_data['Temps (s)']:
+                lastTime = self.accumulated_co2_temp_humidity_data['Temps (s)'][-1]
+            
+            timestamps = co2_timestamps if co2_timestamps else (temp_timestamps if temp_timestamps else humidity_timestamps)
+            
+            self.accumulated_co2_temp_humidity_data['Minutes'].extend([(lastTime + t) / 60.0 for t in timestamps])
+            self.accumulated_co2_temp_humidity_data['Temps (s)'].extend([lastTime + t for t in timestamps])
+            self.accumulated_co2_temp_humidity_data['CO2 (ppm)'].extend(co2_values)
+            self.accumulated_co2_temp_humidity_data['Température (°C)'].extend(temp_values)
+            self.accumulated_co2_temp_humidity_data['Humidité (%)'].extend(humidity_values)
+        
+        return True
+
+    def raz_temp_res_data(self, timestamps, temperatures, tcons_values):
+        """Prépare les données temp/resistance pour un nouvel essai"""
+        if timestamps and len(timestamps) > 0:
+            # Ajouter aux données accumulées sans créer de nouvelle feuille
+            lastTime = 0
+            if self.accumulated_temp_res_data['Temps (s)']:
+                lastTime = self.accumulated_temp_res_data['Temps (s)'][-1]
+            
+            self.accumulated_temp_res_data['Minutes'].extend([(lastTime + t) / 60.0 for t in timestamps])
+            self.accumulated_temp_res_data['Temps (s)'].extend([lastTime + t for t in timestamps])
+            self.accumulated_temp_res_data['Température mesurée'].extend(temperatures)
+            self.accumulated_temp_res_data['Tcons'].extend(tcons_values)
+        
+        return True
     
     def raz_conductance_data(self, timeList, conductanceList, resistanceList):
-        """
-        Handle RAZ action for conductance data - Called during reset_data
-        
-        Args:
-            timeList: List of timestamps
-            conductanceList: List of conductance values
-            resistanceList: List of resistance values
+        """Prépare les données pour un nouvel essai sans sauvegarder immédiatement"""
+        if timeList and len(timeList) > 0:
+            # Ajouter aux données accumulées sans créer de nouvelle feuille
+            lastTime = 0
+            if self.accumulated_conductance_data['Temps (s)']:
+                lastTime = self.accumulated_conductance_data['Temps (s)'][-1]
             
-        Returns:
-            bool: True if the data was handled successfully, False otherwise
-        """
-        # If we have data, save it to Excel
-        if len(timeList) > 0:
-            return self.save_conductance_data(timeList, conductanceList, resistanceList)
+            self.accumulated_conductance_data['Minutes'].extend([(lastTime + t) / 60.0 for t in timeList])
+            self.accumulated_conductance_data['Temps (s)'].extend([lastTime + t for t in timeList])
+            self.accumulated_conductance_data['Conductance (µS)'].extend(conductanceList)
+            self.accumulated_conductance_data['Resistance (Ohms)'].extend(resistanceList)
         
-        # If no data but we have a file initialized, create an empty sheet
-        # to ensure cleanup during RAZ with no data
-        if self.conductance_file:
-            sheet_name = f"Conductance_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
-            empty_data = {
-                'Minutes': [],
-                'Temps (s)': [],
-                'Conductance (µS)': [],
-                'Resistance (Ohms)': []
-            }
-            # This will trigger the empty sheet deletion logic in add_sheet_to_excel
-            return self.add_sheet_to_excel(self.conductance_file, sheet_name, empty_data)
-            
         return True
     
     def save_conductance_data(self, timeList, conductanceList, resistanceList):
-        """
-        Save conductance data to Excel with improved logic
-        
-        Args:
-            timeList: List of timestamps
-            conductanceList: List of conductance values
-            resistanceList: List of resistance values
-            
-        Returns:
-            bool: True if the data was saved successfully, False otherwise
-        """
+        """Sauvegarde les données de conductance"""
         if not self.conductance_file:
             self.initialize_file("conductance")
         
@@ -265,9 +307,12 @@ class ExcelHandler:
         self.accumulated_conductance_data['Conductance (µS)'].extend(conductanceList)
         self.accumulated_conductance_data['Resistance (Ohms)'].extend(resistanceList)
         
+        # Incrémenter le compteur à chaque sauvegarde (start button)
+        self.conductance_series_count += 1
+        
         # Create current test data sheet only if there's data
         if len(timeList) > 0:
-            sheet_name = f"Conductance_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+            sheet_name = f"Cond_{datetime.now().strftime('%H%M%S')}"
             data = {
                 'Minutes': [t / 60.0 for t in timeList],
                 'Temps (s)': timeList,
@@ -276,36 +321,12 @@ class ExcelHandler:
             }
             
             # Save current test data
-            result = self.add_sheet_to_excel(self.conductance_file, sheet_name, data)
-            
-            # Incrémenter le compteur de séries
-            self.conductance_series_count += 1
-            
-            # Save accumulated data only if we have multiple data entries (at least 2 series)
-            if self.conductance_series_count >= 2:
-                # Vérifier qu'il y a des données à sauvegarder
-                if self.accumulated_conductance_data and any(len(v) > 0 for v in self.accumulated_conductance_data.values()):
-                    self.add_sheet_to_excel(self.conductance_file, "Essais cumulés", self.accumulated_conductance_data)
-            
-            return result
+            return self.add_sheet_to_excel(self.conductance_file, sheet_name, data)
         
         return False
     
-    def save_co2_temp_humidity_data(self, co2_timestamps, co2_values, temp_timestamps, temp_values, humidity_timestamps, humidity_values):
-        """
-        Save CO2, temperature and humidity data to Excel
-        
-        Args:
-            co2_timestamps: List of timestamps for CO2 measurements
-            co2_values: List of CO2 values
-            temp_timestamps: List of timestamps for temperature measurements
-            temp_values: List of temperature values
-            humidity_timestamps: List of timestamps for humidity measurements
-            humidity_values: List of humidity values
-            
-        Returns:
-            bool: True if the data was saved successfully, False otherwise
-        """
+    def save_co2_temp_humidity_data(self, co2_timestamps, co2_values, temp_timestamps, temp_values, humidity_timestamps, humidity_values, delta_c=None, carbon_mass=None):
+        """Sauvegarde les données CO2/temp/humidity"""
         if not self.co2_temp_humidity_file:
             self.initialize_file("co2_temp_humidity")
         
@@ -327,8 +348,11 @@ class ExcelHandler:
         self.accumulated_co2_temp_humidity_data['Température (°C)'].extend(temp_values)
         self.accumulated_co2_temp_humidity_data['Humidité (%)'].extend(humidity_values)
         
+        # Incrémenter le compteur à chaque sauvegarde (start button)
+        self.co2_temp_humidity_series_count += 1
+        
         # Create current test data sheet
-        sheet_name = f"CO2_Temp_H_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+        sheet_name = f"CO2_{datetime.now().strftime('%H%M%S')}"
         data = {
             'Minutes': [t / 60.0 for t in timestamps],
             'Temps (s)': timestamps,
@@ -340,29 +364,30 @@ class ExcelHandler:
         # Save current test data
         result = self.add_sheet_to_excel(self.co2_temp_humidity_file, sheet_name, data)
         
-        # Incrémenter le compteur de séries
-        self.co2_temp_humidity_series_count += 1
-        
-        # Save accumulated data only if we have multiple data entries (at least 2 series)
-        if self.co2_temp_humidity_series_count >= 2:
-            # Vérifier qu'il y a des données à sauvegarder
-            if self.accumulated_co2_temp_humidity_data and any(len(v) > 0 for v in self.accumulated_co2_temp_humidity_data.values()):
-                self.add_sheet_to_excel(self.co2_temp_humidity_file, "Essais cumulés", self.accumulated_co2_temp_humidity_data)
+        # Add deltaC and masseC cells if provided
+        if result and (delta_c is not None or carbon_mass is not None):
+            try:
+                wb = load_workbook(self.co2_temp_humidity_file)
+                if sheet_name in wb.sheetnames:
+                    ws = wb[sheet_name]
+                    last_col = ws.max_column
+                    
+                    if delta_c is not None:
+                        ws.cell(row=1, column=last_col+1, value="deltaC (ppm)")
+                        ws.cell(row=2, column=last_col+1, value=delta_c)
+                    
+                    if carbon_mass is not None:
+                        ws.cell(row=1, column=last_col+2, value="masseC (µg)")
+                        ws.cell(row=2, column=last_col+2, value=carbon_mass)
+                    
+                    wb.save(self.co2_temp_humidity_file)
+            except Exception as e:
+                print(f"Error adding deltaC and masseC cells: {e}")
         
         return result
     
     def save_temp_res_data(self, timestamps, temperatures, tcons_values):
-        """
-        Save temperature and resistance data to Excel
-        
-        Args:
-            timestamps: List of timestamps
-            temperatures: List of temperature values
-            tcons_values: List of Tcons values
-            
-        Returns:
-            bool: True if the data was saved successfully, False otherwise
-        """
+        """Sauvegarde les données temp/resistance"""
         if not self.temp_res_file:
             self.initialize_file("temp_res")
         
@@ -380,8 +405,11 @@ class ExcelHandler:
         self.accumulated_temp_res_data['Température mesurée'].extend(temperatures)
         self.accumulated_temp_res_data['Tcons'].extend(tcons_values)
         
+        # Incrémenter le compteur à chaque sauvegarde (start button)
+        self.temp_res_series_count += 1
+        
         # Create current test data sheet
-        sheet_name = f"Temp_Res_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+        sheet_name = f"Temp_{datetime.now().strftime('%H%M%S')}"
         data = {
             'Minutes': [t / 60.0 for t in timestamps],
             'Temps (s)': timestamps,
@@ -389,19 +417,7 @@ class ExcelHandler:
             'Tcons': tcons_values
         }
         
-        # Save current test data
-        result = self.add_sheet_to_excel(self.temp_res_file, sheet_name, data)
-        
-        # Incrémenter le compteur de séries
-        self.temp_res_series_count += 1
-        
-        # Save accumulated data only if we have multiple data entries (at least 2 series)
-        if self.temp_res_series_count >= 2:
-            # Vérifier qu'il y a des données à sauvegarder
-            if self.accumulated_temp_res_data and any(len(v) > 0 for v in self.accumulated_temp_res_data.values()):
-                self.add_sheet_to_excel(self.temp_res_file, "Essais cumulés", self.accumulated_temp_res_data)
-        
-        return result
+        return self.add_sheet_to_excel(self.temp_res_file, sheet_name, data)
     
     def save_all_data(self, measurement_manager):
         """
@@ -432,13 +448,22 @@ class ExcelHandler:
         has_humidity_data = (measurement_manager.timestamps_humidity and len(measurement_manager.timestamps_humidity) > 0)
         
         if has_co2_data or has_temp_data or has_humidity_data:
+            # Get regeneration results (delta_c and carbon_mass) if available
+            delta_c = None
+            carbon_mass = None
+            if hasattr(measurement_manager, 'regeneration_results') and measurement_manager.regeneration_results:
+                delta_c = measurement_manager.regeneration_results.get('delta_c')
+                carbon_mass = measurement_manager.regeneration_results.get('carbon_mass')
+            
             result = self.save_co2_temp_humidity_data(
                 measurement_manager.timestamps_co2,
                 measurement_manager.values_co2,
                 measurement_manager.timestamps_temp,
                 measurement_manager.values_temp,
                 measurement_manager.timestamps_humidity,
-                measurement_manager.values_humidity
+                measurement_manager.values_humidity,
+                delta_c,
+                carbon_mass
             )
             success = success and result
             any_data_saved = any_data_saved or result
@@ -504,3 +529,178 @@ class ExcelHandler:
         except Exception as e:
             print(f"Error renaming test folder: {e}")
             return False
+        
+    def add_charts_to_excel(self, file_path):
+        """
+        Ajoute des graphiques aux feuilles Excel existantes
+        
+        Args:
+            file_path: Chemin du fichier Excel à modifier
+        """
+        if not os.path.exists(file_path):
+            return False
+            
+        try:
+            # Temporairement désactivé pour résoudre les problèmes de corruption de fichiers
+            print(f"Création de graphiques dans le fichier Excel désactivée pour {file_path}")
+            return True
+            
+            # Code original commenté
+            """
+            wb = load_workbook(file_path)
+            
+            # Traiter différemment selon le type de fichier
+            if "conductance" in os.path.basename(file_path).lower():
+                self._add_conductance_charts(wb)
+            elif "co2_temp_humidity" in os.path.basename(file_path).lower():
+                self._add_co2_temp_humidity_charts(wb)
+            elif "temperature_resistance" in os.path.basename(file_path).lower():
+                self._add_temp_res_charts(wb)
+                
+            wb.save(file_path)
+            """
+            
+            return True
+        except Exception as e:
+            print(f"Error adding charts to Excel: {e}")
+            return False
+    
+    def _add_co2_temp_humidity_charts(self, wb):
+        """
+        Ajoute des graphiques combinés CO2/Température/Humidité
+        """
+        for sheet_name in wb.sheetnames:
+            if sheet_name == "_temp":
+                continue
+                
+            ws = wb[sheet_name]
+            
+            # Créer un graphique linéaire
+            chart1 = LineChart()
+            chart1.title = f"CO2/Température/Humidité - {sheet_name}"
+            chart1.style = 13
+            chart1.y_axis.title = 'CO2 (ppm)'
+            chart1.x_axis.title = 'Temps (minutes)'
+            
+            # Ajouter un second axe Y
+            chart2 = LineChart()
+            chart2.style = 13
+            chart2.y_axis.title = "Température (°C) / Humidité (%)"
+            
+            # Déterminer les données
+            max_row = ws.max_row
+            if max_row <= 1:  # Pas de données
+                continue
+                
+            # Références aux données
+            x_data = Reference(ws, min_col=1, min_row=2, max_row=max_row)
+            y1_data = Reference(ws, min_col=3, min_row=1, max_row=max_row)  # CO2
+            y2_data = Reference(ws, min_col=4, min_row=1, max_row=max_row)  # Température
+            y3_data = Reference(ws, min_col=5, min_row=1, max_row=max_row)  # Humidité
+            
+            # Ajouter les données aux graphiques
+            chart1.add_data(y1_data, titles_from_data=True)
+            chart2.add_data(y2_data, titles_from_data=True)
+            chart2.add_data(y3_data, titles_from_data=True)
+            
+            # Configurer l'axe X
+            chart1.set_categories(x_data)
+            chart2.set_categories(x_data)
+            
+            # Combiner les graphiques
+            chart1.y_axis.crosses = "max"
+            chart2.y_axis.crosses = "min"
+            chart1 += chart2
+            
+            # Positionner le graphique
+            ws.add_chart(chart1, "G2")
+    
+    def _add_conductance_charts(self, wb):
+        """
+        Ajoute des graphiques pour les données de conductance
+        """
+        for sheet_name in wb.sheetnames:
+            if sheet_name == "_temp":
+                continue
+                
+            ws = wb[sheet_name]
+            max_row = ws.max_row
+            if max_row <= 1:
+                continue
+                
+            # Graphique conductance
+            chart = LineChart()
+            chart.title = f"Conductance - {sheet_name}"
+            chart.style = 13
+            chart.y_axis.title = 'Conductance (µS)'
+            chart.x_axis.title = 'Temps (minutes)'
+            
+            x_data = Reference(ws, min_col=1, min_row=2, max_row=max_row)
+            y_data = Reference(ws, min_col=3, min_row=1, max_row=max_row)
+            
+            chart.add_data(y_data, titles_from_data=True)
+            chart.set_categories(x_data)
+            ws.add_chart(chart, "G2")
+            
+            # Graphique résistance
+            chart2 = LineChart()
+            chart2.title = f"Résistance - {sheet_name}"
+            chart2.style = 13
+            chart2.y_axis.title = 'Résistance (Ohms)'
+            chart2.x_axis.title = 'Temps (minutes)'
+            
+            y2_data = Reference(ws, min_col=4, min_row=1, max_row=max_row)
+            
+            chart2.add_data(y2_data, titles_from_data=True)
+            chart2.set_categories(x_data)
+            ws.add_chart(chart2, "G20")
+    
+    def _add_temp_res_charts(self, wb):
+        """
+        Ajoute des graphiques pour les données température/résistance
+        """
+        for sheet_name in wb.sheetnames:
+            if sheet_name == "_temp":
+                continue
+                
+            ws = wb[sheet_name]
+            max_row = ws.max_row
+            if max_row <= 1:
+                continue
+                
+            # Graphique combiné
+            chart1 = LineChart()
+            chart1.title = f"Température - {sheet_name}"
+            chart1.style = 13
+            chart1.y_axis.title = 'Température (°C)'
+            chart1.x_axis.title = 'Temps (minutes)'
+            
+            chart2 = LineChart()
+            chart2.style = 13
+            chart2.y_axis.title = "Tcons (°C)"
+            
+            x_data = Reference(ws, min_col=1, min_row=2, max_row=max_row)
+            y1_data = Reference(ws, min_col=3, min_row=1, max_row=max_row)  # Température mesurée
+            y2_data = Reference(ws, min_col=4, min_row=1, max_row=max_row)  # Tcons
+            
+            chart1.add_data(y1_data, titles_from_data=True)
+            chart2.add_data(y2_data, titles_from_data=True)
+            
+            chart1.set_categories(x_data)
+            chart2.set_categories(x_data)
+            
+            chart1.y_axis.crosses = "max"
+            chart2.y_axis.crosses = "min"
+            chart1 += chart2
+            
+            ws.add_chart(chart1, "G2")
+
+    def _should_create_cumulative_sheet(self, file_path):
+        """Détermine si une feuille 'Essais cumulés' doit être créée"""
+        if "conductance" in os.path.basename(file_path).lower():
+            return self.conductance_series_count >= 2
+        elif "co2_temp_humidity" in os.path.basename(file_path).lower():
+            return self.co2_temp_humidity_series_count >= 2
+        elif "temperature_resistance" in os.path.basename(file_path).lower():
+            return self.temp_res_series_count >= 2
+        return False
