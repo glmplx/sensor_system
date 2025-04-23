@@ -88,20 +88,20 @@ class ExcelHandler:
         if not self.test_folder_path:
             self.initialize_folder()
         
-        # Get current date for filename
-        current_date = datetime.now().strftime('%Y-%m-%d')
+        # Get current date and time for filename
+        current_datetime = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         
         # Create the appropriate file based on the type
         if file_type == "conductance":
-            self.conductance_file = os.path.join(self.test_folder_path, f'conductance_{current_date}.xlsx')
+            self.conductance_file = os.path.join(self.test_folder_path, f'conductance_{current_datetime}.xlsx')
             return self._create_workbook_with_info(self.conductance_file, file_type)
         
         elif file_type == "co2_temp_humidity":
-            self.co2_temp_humidity_file = os.path.join(self.test_folder_path, f'co2_temp_humidity_{current_date}.xlsx')
+            self.co2_temp_humidity_file = os.path.join(self.test_folder_path, f'co2_temp_humidity_{current_datetime}.xlsx')
             return self._create_workbook_with_info(self.co2_temp_humidity_file, file_type)
         
         elif file_type == "temp_res":
-            self.temp_res_file = os.path.join(self.test_folder_path, f'temperature_resistance_{current_date}.xlsx')
+            self.temp_res_file = os.path.join(self.test_folder_path, f'temperature_resistance_{current_datetime}.xlsx')
             return self._create_workbook_with_info(self.temp_res_file, file_type)
         
         return None
