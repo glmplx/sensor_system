@@ -28,7 +28,7 @@ class MenuUI:
         self.mode_auto_var = tk.IntVar()
         
         # Measurement selection variables (for manual mode)
-        self.measure_conductance_var = tk.IntVar(value=1)
+        self.measure_conductance_var = tk.IntVar(value=0)  # Conductance désactivée par défaut
         self.measure_co2_var = tk.IntVar(value=1)
         self.measure_regen_var = tk.IntVar(value=1)
         
@@ -60,8 +60,14 @@ class MenuUI:
         arduino_com_dropdown.grid(row=0, column=1, padx=10, pady=10)
         
         # Pré-sélectionner le port Arduino s'il a été détecté
-        if arduino_port_index is not None:
+        arduino_detected = arduino_port_index is not None
+        if arduino_detected:
             self.arduino_com_var.set(ports_display[arduino_port_index])
+            # Préselectionner CO2/température/humidité si Arduino détecté
+            self.measure_co2_var.set(1)
+        else:
+            # Désactiver CO2/température/humidité si Arduino non détecté
+            self.measure_co2_var.set(0)
         
         # Arduino baud rate
         tk.Label(self.window, text="Baudrate de l'Arduino:").grid(row=1, column=0, padx=10, pady=10, sticky='w')
@@ -74,8 +80,14 @@ class MenuUI:
         other_com_dropdown.grid(row=2, column=1, padx=10, pady=10)
         
         # Pré-sélectionner le port Serial s'il a été détecté
-        if regen_port_index is not None:
+        regen_detected = regen_port_index is not None
+        if regen_detected:
             self.other_com_var.set(ports_display[regen_port_index])
+            # Préselectionner régénération/température si carte régénération détectée
+            self.measure_regen_var.set(1)
+        else:
+            # Désactiver régénération/température si carte non détectée
+            self.measure_regen_var.set(0)
         
         # Regeneration card baud rate
         tk.Label(self.window, text="Baudrate de la carte pour la régénération:").grid(row=3, column=0, padx=10, pady=10, sticky='w')
