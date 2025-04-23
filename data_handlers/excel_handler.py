@@ -7,6 +7,9 @@ import sys
 import pandas as pd
 from datetime import datetime
 from openpyxl import Workbook, load_workbook
+
+# Ajout du répertoire parent au path pour résoudre les importations
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.constants import EXCEL_BASE_DIR
 
 class ExcelHandler:
@@ -24,6 +27,11 @@ class ExcelHandler:
         self.conductance_file = None
         self.co2_temp_humidity_file = None
         self.temp_res_file = None
+        
+        # Compteurs pour suivre le nombre de séries de données
+        self.conductance_series_count = 0
+        self.co2_temp_humidity_series_count = 0 
+        self.temp_res_series_count = 0
         
         # Stores accumulated data between RAZ sessions
         self.accumulated_conductance_data = {
@@ -146,21 +154,29 @@ class ExcelHandler:
             return False
             
         if not data or not any(len(v) > 0 for v in data.values()):
-            print(f"Avertissement: Aucune donnée à enregistrer dans {sheet_name}")
-            return False
+            # Remove the sheet if it exists and we have no data
+            try:
+                wb = load_workbook(file_path)
+                if sheet_name in wb.sheetnames:
+                    wb.remove(wb[sheet_name])
+                    wb.save(file_path)
+                return False
+            except Exception as e:
+                print(f"Error removing empty sheet: {e}")
+                return False
             
         try:
-            # Check if we need to replace an existing "Essais cumulés" sheet
+            # Charger le classeur
             wb = load_workbook(file_path)
+            
             # Ne pas ajouter de feuille Essais cumulés si les données sont vides
             if sheet_name == "Essais cumulés" and not data:
                 return False
-                
-            # Remplacer la feuille Essais cumulés si elle existe déjà
-            if sheet_name == "Essais cumulés" and sheet_name in wb.sheetnames:
-                # Remove the existing sheet first
-                cumul_sheet = wb[sheet_name]
-                wb.remove(cumul_sheet)
+            
+            # Pour les feuilles normales, vérifier si elles existent déjà et les remplacer
+            if sheet_name in wb.sheetnames:
+                existing_sheet = wb[sheet_name]
+                wb.remove(existing_sheet)
                 wb.save(file_path)
             
             # Write our data to the Excel file
@@ -174,14 +190,55 @@ class ExcelHandler:
                 temp_sheet = wb["_temp"]
                 wb.remove(temp_sheet)
                 wb.save(file_path)
+                
+            # Compte le nombre de feuilles de données (excluant _temp et Essais cumulés)
+            data_sheet_count = 0
+            for s in wb.sheetnames:
+                if s != "_temp" and s != "Essais cumulés":
+                    data_sheet_count += 1
+            
+            # Si on a plus de 2 feuilles d'essais, créer automatiquement une feuille "Essais cumulés"
+            # La feuille "Essais cumulés" sera mise à jour par les méthodes save_xxx_data
+            
             return True
         except Exception as e:
             print(f"Error adding sheet to Excel file: {e}")
             return False
     
+    def raz_conductance_data(self, timeList, conductanceList, resistanceList):
+        """
+        Handle RAZ action for conductance data - Called during reset_data
+        
+        Args:
+            timeList: List of timestamps
+            conductanceList: List of conductance values
+            resistanceList: List of resistance values
+            
+        Returns:
+            bool: True if the data was handled successfully, False otherwise
+        """
+        # If we have data, save it to Excel
+        if len(timeList) > 0:
+            return self.save_conductance_data(timeList, conductanceList, resistanceList)
+        
+        # If no data but we have a file initialized, create an empty sheet
+        # to ensure cleanup during RAZ with no data
+        if self.conductance_file:
+            sheet_name = f"Conductance_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+            empty_data = {
+                'Minutes': [],
+                'Temps (s)': [],
+                'Conductance (µS)': [],
+                'Resistance (Ohms)': []
+            }
+            # This will trigger the empty sheet deletion logic in add_sheet_to_excel
+            return self.add_sheet_to_excel(self.conductance_file, sheet_name, empty_data)
+            
+        return True
+    
     def save_conductance_data(self, timeList, conductanceList, resistanceList):
         """
-        Save conductance data to Excel
+        Save conductance data to Excel with improved logic
         
         Args:
             timeList: List of timestamps
@@ -208,23 +265,31 @@ class ExcelHandler:
         self.accumulated_conductance_data['Conductance (µS)'].extend(conductanceList)
         self.accumulated_conductance_data['Resistance (Ohms)'].extend(resistanceList)
         
-        # Create current test data sheet
-        sheet_name = f"Conductance_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
-        data = {
-            'Minutes': [t / 60.0 for t in timeList],
-            'Temps (s)': timeList,
-            'Conductance (µS)': conductanceList,
-            'Resistance (Ohms)': resistanceList
-        }
+        # Create current test data sheet only if there's data
+        if len(timeList) > 0:
+            sheet_name = f"Conductance_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+            data = {
+                'Minutes': [t / 60.0 for t in timeList],
+                'Temps (s)': timeList,
+                'Conductance (µS)': conductanceList,
+                'Resistance (Ohms)': resistanceList
+            }
+            
+            # Save current test data
+            result = self.add_sheet_to_excel(self.conductance_file, sheet_name, data)
+            
+            # Incrémenter le compteur de séries
+            self.conductance_series_count += 1
+            
+            # Save accumulated data only if we have multiple data entries (at least 2 series)
+            if self.conductance_series_count >= 2:
+                # Vérifier qu'il y a des données à sauvegarder
+                if self.accumulated_conductance_data and any(len(v) > 0 for v in self.accumulated_conductance_data.values()):
+                    self.add_sheet_to_excel(self.conductance_file, "Essais cumulés", self.accumulated_conductance_data)
+            
+            return result
         
-        # Save current test data
-        result = self.add_sheet_to_excel(self.conductance_file, sheet_name, data)
-        
-        # Save accumulated data only if we have multiple data entries
-        if len(set(self.accumulated_conductance_data['Temps (s)'])) > len(timeList):
-            self.add_sheet_to_excel(self.conductance_file, "Essais cumulés", self.accumulated_conductance_data)
-        
-        return result
+        return False
     
     def save_co2_temp_humidity_data(self, co2_timestamps, co2_values, temp_timestamps, temp_values, humidity_timestamps, humidity_values):
         """
@@ -275,9 +340,14 @@ class ExcelHandler:
         # Save current test data
         result = self.add_sheet_to_excel(self.co2_temp_humidity_file, sheet_name, data)
         
-        # Save accumulated data only if we have multiple data entries
-        if len(set(self.accumulated_co2_temp_humidity_data['Temps (s)'])) > len(timestamps):
-            self.add_sheet_to_excel(self.co2_temp_humidity_file, "Essais cumulés", self.accumulated_co2_temp_humidity_data)
+        # Incrémenter le compteur de séries
+        self.co2_temp_humidity_series_count += 1
+        
+        # Save accumulated data only if we have multiple data entries (at least 2 series)
+        if self.co2_temp_humidity_series_count >= 2:
+            # Vérifier qu'il y a des données à sauvegarder
+            if self.accumulated_co2_temp_humidity_data and any(len(v) > 0 for v in self.accumulated_co2_temp_humidity_data.values()):
+                self.add_sheet_to_excel(self.co2_temp_humidity_file, "Essais cumulés", self.accumulated_co2_temp_humidity_data)
         
         return result
     
@@ -322,9 +392,14 @@ class ExcelHandler:
         # Save current test data
         result = self.add_sheet_to_excel(self.temp_res_file, sheet_name, data)
         
-        # Save accumulated data only if we have multiple data entries
-        if len(set(self.accumulated_temp_res_data['Temps (s)'])) > len(timestamps):
-            self.add_sheet_to_excel(self.temp_res_file, "Essais cumulés", self.accumulated_temp_res_data)
+        # Incrémenter le compteur de séries
+        self.temp_res_series_count += 1
+        
+        # Save accumulated data only if we have multiple data entries (at least 2 series)
+        if self.temp_res_series_count >= 2:
+            # Vérifier qu'il y a des données à sauvegarder
+            if self.accumulated_temp_res_data and any(len(v) > 0 for v in self.accumulated_temp_res_data.values()):
+                self.add_sheet_to_excel(self.temp_res_file, "Essais cumulés", self.accumulated_temp_res_data)
         
         return result
     

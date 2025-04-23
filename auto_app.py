@@ -153,27 +153,39 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         plot_manager.update_raz_buttons_visibility({'auto': measure_auto})
     
     def raz_auto(event):
-        # Save current data before reset
-        data_handler.save_conductance_data(
-            measurements.timeList,
-            measurements.conductanceList,
-            measurements.resistanceList
-        )
+        # Save current data before reset only if there's data to save
+        # Sauvegarder les données de conductance
+        if len(measurements.timeList) > 0:
+            data_handler.save_conductance_data(
+                measurements.timeList,
+                measurements.conductanceList,
+                measurements.resistanceList
+            )
+            # Ne pas réinitialiser les données accumulées pour garder l'historique
+            # Les temps sont ajustés automatiquement dans save_conductance_data
         
-        data_handler.save_co2_temp_humidity_data(
-            measurements.timestamps_co2,
-            measurements.values_co2,
-            measurements.timestamps_temp,
-            measurements.values_temp,
-            measurements.timestamps_humidity,
-            measurements.values_humidity
-        )
+        # Sauvegarder les données de CO2/température/humidité
+        if len(measurements.timestamps_co2) > 0 or len(measurements.timestamps_temp) > 0 or len(measurements.timestamps_humidity) > 0:
+            data_handler.save_co2_temp_humidity_data(
+                measurements.timestamps_co2,
+                measurements.values_co2,
+                measurements.timestamps_temp,
+                measurements.values_temp,
+                measurements.timestamps_humidity,
+                measurements.values_humidity
+            )
+            # Ne pas réinitialiser les données accumulées pour garder l'historique
+            # Les temps sont ajustés automatiquement dans save_co2_temp_humidity_data
         
-        data_handler.save_temp_res_data(
-            measurements.timestamps_res_temp,
-            measurements.temperatures,
-            measurements.Tcons_values
-        )
+        # Sauvegarder les données de température/résistance
+        if len(measurements.timestamps_res_temp) > 0:
+            data_handler.save_temp_res_data(
+                measurements.timestamps_res_temp,
+                measurements.temperatures,
+                measurements.Tcons_values
+            )
+            # Ne pas réinitialiser les données accumulées pour garder l'historique
+            # Les temps sont ajustés automatiquement dans save_temp_res_data
         
         # Reset all data
         measurements.reset_data()
@@ -252,38 +264,49 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         
         # Sauvegarder les données immédiatement avant de fermer les connexions
         try:
+            # Vérifier si des fichiers ont été initialisés (même si les mesures sont arrêtées)
+            files_initialized = (
+                data_handler.conductance_file is not None or
+                data_handler.co2_temp_humidity_file is not None or
+                data_handler.temp_res_file is not None
+            )
+            
             if measure_auto:
                 print("Sauvegarde des données...")
                 saved = data_handler.save_all_data(measurements)
+            else:
+                saved = False
+                if files_initialized:
+                    print("Mesures automatiques arrêtées - aucune sauvegarde supplémentaire nécessaire")
+            
+            # Proposer à l'utilisateur de renommer le dossier de données si des fichiers ont été initialisés
+            if files_initialized and hasattr(data_handler, 'test_folder_path') and data_handler.test_folder_path is not None:
+                if saved:
+                    print(f"Les données ont été enregistrées dans: {data_handler.test_folder_path}")
                 
-                # Proposer à l'utilisateur de renommer le dossier de données (même si pas de sauvegarde)
-                if hasattr(data_handler, 'test_folder_path') and data_handler.test_folder_path is not None:
-                    if saved:
-                        print(f"Les données ont été enregistrées dans: {data_handler.test_folder_path}")
-                    
-                    import tkinter as tk
-                    from tkinter import simpledialog
-                    
-                    # Créer une fenêtre Tkinter et la configurer pour être au premier plan
-                    root = tk.Tk()
-                    root.withdraw()  # Cacher la fenêtre principale
-                    root.attributes('-topmost', True)  # Mettre au premier plan
-                    
-                    # Obtenir le nom initial du dossier
-                    initial_folder_name = os.path.basename(data_handler.test_folder_path)
-                    
-                    # Afficher la boîte de dialogue pour le nouveau nom avec focus
-                    new_folder_name = simpledialog.askstring(
-                        "Renommer le dossier de données", 
-                        "Voulez-vous renommer le dossier de données ? (Laissez vide pour conserver le nom actuel)",
-                        initialvalue=initial_folder_name,
-                        parent=root  # Utiliser root comme parent pour hériter du topmost
-                    )
-                    
-                    # Si l'utilisateur a fourni un nom différent, renommer le dossier
-                    if new_folder_name and new_folder_name.strip() and new_folder_name.strip() != initial_folder_name:
-                        data_handler.rename_test_folder(new_folder_name.strip())
-                        print(f"Dossier renommé en: {new_folder_name.strip()}")
+                import tkinter as tk
+                from tkinter import simpledialog
+                
+                # Créer une fenêtre Tkinter et la configurer pour être au premier plan
+                root = tk.Tk()
+                root.withdraw()  # Cacher la fenêtre principale
+                root.attributes('-topmost', True)  # Mettre au premier plan
+                
+                # Obtenir le nom initial du dossier
+                initial_folder_name = os.path.basename(data_handler.test_folder_path)
+                
+                # Afficher la boîte de dialogue pour le nouveau nom avec focus
+                new_folder_name = simpledialog.askstring(
+                    "Renommer le dossier de données", 
+                    "Voulez-vous renommer le dossier de données ? (Laissez vide pour conserver le nom actuel)",
+                    initialvalue=initial_folder_name,
+                    parent=root  # Utiliser root comme parent pour hériter du topmost
+                )
+                
+                # Si l'utilisateur a fourni un nom différent, renommer le dossier
+                if new_folder_name and new_folder_name.strip() and new_folder_name.strip() != initial_folder_name:
+                    data_handler.rename_test_folder(new_folder_name.strip())
+                    print(f"Dossier renommé en: {new_folder_name.strip()}")
             else:
                 print("Mode auto inactif - aucune donnée à sauvegarder")
         except Exception as e:

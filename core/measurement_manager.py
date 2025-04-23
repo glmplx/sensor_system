@@ -130,7 +130,7 @@ class MeasurementManager:
     
     def reset_data(self, data_type=None):
         """
-        Reset stored data
+        Reset stored data with proper handling for ExcelHandler
         
         Args:
             data_type: Type of data to reset, or None for all data
@@ -139,6 +139,16 @@ class MeasurementManager:
         last_tcons = getattr(self, 'last_set_Tcons', None)
         
         if data_type in [None, "conductance"]:
+            # Save current data before resetting if we have an ExcelHandler
+            if hasattr(self, 'excel_handler') and len(self.timeList) > 0:
+                # This will trigger the save to Excel
+                self.excel_handler.raz_conductance_data(
+                    self.timeList,
+                    self.conductanceList, 
+                    self.resistanceList
+                )
+                
+            # Now reset the data
             self.timeList.clear()
             self.conductanceList.clear()
             self.resistanceList.clear()
@@ -147,6 +157,8 @@ class MeasurementManager:
             self.elapsed_time_conductance = 0
         
         if data_type in [None, "co2_temp_humidity"]:
+            # Handle CO2/temp/humidity data similarly if needed
+            # (Add similar code here for CO2/temp/humidity when implemented)
             self.timestamps_co2.clear()
             self.values_co2.clear()
             self.timestamps_temp.clear()
@@ -158,6 +170,8 @@ class MeasurementManager:
             self.elapsed_time_co2_temp_humidity = 0
         
         if data_type in [None, "res_temp"]:
+            # Handle temp_res data similarly if needed
+            # (Add similar code here for temp_res when implemented)
             self.timestamps_res_temp.clear()
             self.temperatures.clear()
             self.Tcons_values.clear()
