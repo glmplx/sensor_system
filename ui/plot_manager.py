@@ -16,6 +16,9 @@ class PlotManager:
         Args:
             mode: "manual" or "auto" mode
         """
+        # Désactiver la barre d'outils de navigation avant de créer les figures
+        plt.rcParams['toolbar'] = 'None'
+        
         self.mode = mode
         self.fig = None
         self.axes = {
@@ -40,7 +43,9 @@ class PlotManager:
     
     def setup_plots(self):
         """Set up the figure and axes for plots"""
+        # Créer une figure sans barre d'outils en utilisant le paramètre 'toolbar=None'
         self.fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(14, 18))
+        
         
         # Set window size/position based on how we're running
         try:

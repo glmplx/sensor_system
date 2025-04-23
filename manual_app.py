@@ -503,7 +503,26 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         measurements.set_Tcons(str(TCONS_LOW))
         print(f"Tcons défini à {TCONS_LOW}°C avant fermeture")
         escape_pressed = True
+        
+        # Fermer immédiatement, sans attendre la fin de la boucle principale
+        # Close all connections
+        if keithley is not None:
+            keithley.close()
+        if arduino_connected:
+            arduino.close()
+        if regen_connected:
+            regen.close()
+        
+        # Fermeture de tous les graphiques
         plot_manager.close()
+        
+        # Forcer la fermeture de toutes les figures matplotlib
+        plt.ioff()
+        plt.close('all')
+        
+        # Terminer l'exécution immédiatement
+        import sys
+        sys.exit(0)
     
     # Connect event handlers
     plot_manager.connect_button('conductance', toggle_conductance)
@@ -664,17 +683,23 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         root = tk.Tk()
         root.withdraw()  # Cacher la fenêtre principale
         
+        # Vérifier si le chemin du dossier de test existe avant de l'utiliser
+        initial_folder_name = ""
+        if hasattr(data_handler, 'test_folder_path') and data_handler.test_folder_path is not None:
+            initial_folder_name = os.path.basename(data_handler.test_folder_path)
+        
         # Afficher la boîte de dialogue pour le nouveau nom
         new_folder_name = simpledialog.askstring(
             "Renommer le dossier de données", 
             "Voulez-vous renommer le dossier de données ? (Laissez vide pour conserver le nom actuel)",
-            initialvalue=os.path.basename(data_handler.test_folder_path)
+            initialvalue=initial_folder_name
         )
         
-        # Si l'utilisateur a fourni un nom, renommer le dossier
-        if new_folder_name and new_folder_name.strip() and new_folder_name != os.path.basename(data_handler.test_folder_path):
-            data_handler.rename_test_folder(new_folder_name.strip())
-            print(f"Dossier renommé en: {new_folder_name.strip()}")
+        # Si l'utilisateur a fourni un nom et que le dossier test existe, renommer le dossier
+        if new_folder_name and new_folder_name.strip() and hasattr(data_handler, 'test_folder_path') and data_handler.test_folder_path is not None:
+            if new_folder_name.strip() != initial_folder_name:
+                data_handler.rename_test_folder(new_folder_name.strip())
+                print(f"Dossier renommé en: {new_folder_name.strip()}")
     
     # Close all connections
     if keithley is not None:

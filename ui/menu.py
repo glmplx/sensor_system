@@ -99,14 +99,25 @@ class MenuUI:
         tk.Checkbutton(self.measurement_frame, text="CO2 / Température / Humidité", variable=self.measure_co2_var).grid(row=1, column=0, sticky='w', padx=10, pady=5)
         tk.Checkbutton(self.measurement_frame, text="Régénération / Température", variable=self.measure_regen_var).grid(row=2, column=0, sticky='w', padx=10, pady=5)
         
+        # Button frame to hold both launch and quit buttons
+        button_frame = tk.Frame(self.window)
+        button_frame.grid(row=6, column=0, columnspan=2, pady=20)
+        
         # Launch button
-        launch_button = tk.Button(self.window, text="Lancer le programme", command=self.launch_program)
-        launch_button.grid(row=6, column=0, columnspan=2, pady=20)
+        launch_button = tk.Button(button_frame, text="Lancer le programme", command=self.launch_program)
+        launch_button.pack(side=tk.LEFT, padx=10)
+        
+        # Quit button
+        quit_button = tk.Button(button_frame, text="Quitter", command=self.quit_application)
+        quit_button.pack(side=tk.LEFT, padx=10)
     
     def set_manual_mode(self):
         """Définir le mode manuel et décocher le mode automatique"""
-        self.mode_auto_var.set(0)
-        self.measurement_frame.grid()  # Show measurement selection
+        if self.mode_manual_var.get():
+            self.mode_auto_var.set(0)
+            self.measurement_frame.grid()  # Show measurement selection
+        else:
+            self.measurement_frame.grid_remove()  # Hide measurement selection
     
     def set_auto_mode(self):
         """Définir le mode automatique et décocher le mode manuel"""
@@ -304,6 +315,12 @@ class MenuUI:
             # Utiliser execv pour remplacer le processus actuel (pas de sous-processus)
             os.execv(sys.executable, command)
     
+    def quit_application(self):
+        """Ferme l'application proprement et termine le processus"""
+        self.window.destroy()
+        import sys
+        sys.exit(0)
+
     def run(self):
         """Exécuter la boucle principale de l'interface utilisateur"""
         self.window.mainloop()
