@@ -20,8 +20,8 @@ def main():
         print("Traceback:")
         traceback.print_exc()
         # Keep console open
-        print("\nLe programme va se fermer dans 30 secondes...")
-        time.sleep(30)
+        print("\nAppuyez sur Entrée pour fermer le programme...")
+        input()  # Attend que l'utilisateur appuie sur Entrée au lieu de bloquer avec time.sleep
         sys.exit(1)
 
 if __name__ == "__main__":

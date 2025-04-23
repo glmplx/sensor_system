@@ -33,26 +33,26 @@ class KeithleyDevice:
     def configure(self):
         """Configurer l'appareil Keithley"""
         try:
-            # Turn off zero check
+            # Désactiver la vérification zéro
             self.device.write(KEITHLEY_COMMANDS["ZERO_CHECK_OFF"])
             
-            # Set measurement mode to resistance
+            # Définir le mode de mesure sur résistance
             self.device.write(KEITHLEY_COMMANDS["MODE_RESISTANCE"])
             
-            # Set auto range limits
+            # Définir les limites de gamme automatique
             self.device.write(KEITHLEY_COMMANDS["AUTO_RANGE_LOW_LIMIT"])
             self.device.write(KEITHLEY_COMMANDS["AUTO_RANGE_HIGH_LIMIT"])
             
-            # Set voltage range and level
+            # Définir la plage et le niveau de tension
             self.device.write(KEITHLEY_COMMANDS["VOLTAGE_RANGE"])
             self.device.write(KEITHLEY_COMMANDS["VOLTAGE_LEVEL"])
             
-            # Turn on output
+            # Activer la sortie
             self.device.write(KEITHLEY_COMMANDS["OUTPUT_ON"])
             
             return True
         except Exception as e:
-            print(f"Error configuring Keithley: {e}")
+            print(f"Erreur lors de la configuration du Keithley: {e}")
             return False
     
     def read_resistance(self):
@@ -90,6 +90,11 @@ class KeithleyDevice:
             print(f"Error parsing resistance data: {e}")
             return None
     
+    async def _async_delay(self, seconds):
+        """Délai asynchrone pour ne pas bloquer l'exécution"""
+        import asyncio
+        await asyncio.sleep(seconds)
+        
     def turn_output_on(self):
         """Activer la sortie du Keithley"""
         try:
@@ -101,8 +106,8 @@ class KeithleyDevice:
                 
             self.device.write(KEITHLEY_COMMANDS["OUTPUT_ON"])
             
-            # Petit délai pour laisser à l'appareil le temps de traiter la commande
-            time.sleep(0.5)
+            # Au lieu de bloquer avec time.sleep, on continue immédiatement
+            # Définir un délai plus long pour la prochaine opération si nécessaire
             
             # Restaurer le timeout original
             if original_timeout is not None:
@@ -111,11 +116,11 @@ class KeithleyDevice:
             return True
         except pyvisa.errors.VisaIOError as e:
             # Erreur spécifique de communication VISA (timeout, etc.)
-            print(f"Warning: Timeout turning on Keithley output: {e}")
+            print(f"Avertissement: Délai dépassé lors de l'activation de la sortie Keithley: {e}")
             # Malgré l'erreur, on continue en considérant que l'opération a réussi
             return True
         except Exception as e:
-            print(f"Error turning on Keithley output: {e}")
+            print(f"Erreur lors de l'activation de la sortie Keithley: {e}")
             return False
     
     def turn_output_off(self):
@@ -129,8 +134,8 @@ class KeithleyDevice:
                 
             self.device.write(KEITHLEY_COMMANDS["OUTPUT_OFF"])
             
-            # Petit délai pour laisser à l'appareil le temps de traiter la commande
-            time.sleep(0.5)
+            # Au lieu de bloquer avec time.sleep, on continue immédiatement
+            # Définir un délai plus long pour la prochaine opération si nécessaire
             
             # Restaurer le timeout original
             if original_timeout is not None:
@@ -139,11 +144,11 @@ class KeithleyDevice:
             return True
         except pyvisa.errors.VisaIOError as e:
             # Erreur spécifique de communication VISA (timeout, etc.)
-            print(f"Warning: Timeout turning off Keithley output: {e}")
+            print(f"Avertissement: Délai dépassé lors de la désactivation de la sortie Keithley: {e}")
             # Malgré l'erreur, on continue en considérant que l'opération a réussi
             return True
         except Exception as e:
-            print(f"Error turning off Keithley output: {e}")
+            print(f"Erreur lors de la désactivation de la sortie Keithley: {e}")
             return False
     
     def close(self):
@@ -153,21 +158,24 @@ class KeithleyDevice:
                 # Essayer d'éteindre la sortie mais continuer même en cas d'erreur
                 try:
                     self.turn_output_off()
-                    # Délai après avoir éteint la sortie
-                    time.sleep(1)
+                    # On supprime le délai bloquant
                 except:
-                    print("Warning: Could not turn off Keithley output during close")
+                    print("Avertissement: Impossible de désactiver la sortie Keithley pendant la fermeture")
                 
                 # Définir un timeout plus long pour la fermeture
                 self.device.timeout = 3000  # 3 secondes
                 self.device.close()
+                self.device = None  # Libérer explicitement la référence
                 return True
             except pyvisa.errors.VisaIOError as e:
                 # Erreur spécifique de communication VISA (timeout, etc.)
-                print(f"Warning: Timeout closing Keithley connection: {e}")
-                # Malgré l'erreur, on considère que l'appareil est fermé
+                print(f"Avertissement: Délai dépassé lors de la fermeture de la connexion Keithley: {e}")
+                # Libérer la référence même en cas d'erreur
+                self.device = None
                 return True
             except Exception as e:
-                print(f"Error closing Keithley connection: {e}")
+                print(f"Erreur lors de la fermeture de la connexion Keithley: {e}")
+                # Libérer la référence même en cas d'erreur
+                self.device = None
                 return False
         return True

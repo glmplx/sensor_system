@@ -385,7 +385,8 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                 plot_manager.update_regeneration_status(regeneration_status, measurements.regeneration_results)
         
         # Update UI - délai court pour une meilleure réactivité
-        plt.pause(0.01)
+        # Utiliser un délai court pour la réactivité de l'UI mais donner une chance au ramasse-miettes Python de libérer la mémoire
+    plt.pause(0.01)
     
     # Save data before exiting
     data_handler.save_all_data(measurements)
@@ -427,17 +428,20 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         plt.close(plot_manager.fig)
     plot_manager.fig = None
     
-    # Tuer tous les threads matplotlib en arrière-plan
-    for thread in sys._current_frames().keys():
-        try:
-            if thread != threading.current_thread().ident:
-                os.kill(thread, signal.SIGTERM)
-        except:
-            pass
-            
-    # Forcer la sortie immédiate en tuant le processus actuel
-    pid = os.getpid()
-    os.kill(pid, signal.SIGTERM)
+    # Fermer proprement les threads matplotlib en arrière-plan
+    # Utilisation de sys.exit() au lieu de os.kill qui est incorrect pour les threads Python
+    import matplotlib
+    matplotlib.pyplot.close('all')
+    
+    # Fermer toutes les références aux traceurs pour libérer la mémoire
+    plot_manager = None
+    
+    # Forcer le ramasse-miettes Python pour libérer la mémoire
+    import gc
+    gc.collect()
+    
+    # Terminer proprement le programme
+    sys.exit(0)
 
 if __name__ == "__main__":
     main()
