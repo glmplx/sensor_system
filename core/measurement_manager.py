@@ -27,12 +27,12 @@ class MeasurementManager:
         self.arduino = arduino_device
         self.regen = regen_device
         
-        # Stockage des données pour les mesures de conductance
+        # Data storage for conductance measurements
         self.timeList = []
         self.conductanceList = []
         self.resistanceList = []
         
-        # Stockage des données pour CO2, température et humidité
+        # Data storage for CO2, temperature and humidity
         self.timestamps_co2 = []
         self.values_co2 = []
         self.timestamps_temp = []
@@ -40,12 +40,12 @@ class MeasurementManager:
         self.timestamps_humidity = []
         self.values_humidity = []
         
-        # Stockage des données pour la température de résistance
+        # Data storage for resistance temperature
         self.timestamps_res_temp = []
         self.temperatures = []
         self.Tcons_values = []
         
-        # Variables de suivi du temps
+        # Time tracking variables
         self.start_time_conductance = None
         self.start_time_co2_temp_humidity = None
         self.start_time_res_temp = None
@@ -53,23 +53,19 @@ class MeasurementManager:
         self.elapsed_time_co2_temp_humidity = 0
         self.elapsed_time_res_temp = 0
         
-        # Variables pour le parallélisme et l'asynchrone
-        self.async_tasks = []
-        self.delayed_actions = {}
-        
         # Variables pour mémoriser le moment de pause
         self.pause_time_conductance = None
         self.pause_time_co2_temp_humidity = None
         self.pause_time_res_temp = None
         
-        # Variables d'état
+        # State variables
         self.increase_detected = False
         self.stabilized = False
         self.increase_time = None
         self.stabilization_time = None
         self.max_slope_value = 0
         self.max_slope_time = 0
-        self.sensor_state = None  # None: inconnu, True: sorti, False: rentré
+        self.sensor_state = None  # None: unknown, True: out, False: in
         self.escape_pressed = False
         self.last_set_Tcons = None  # Stocke la dernière valeur de Tcons définie
         
@@ -108,14 +104,14 @@ class MeasurementManager:
             'tf': False   # Trappe Fermée
         }
         
-        # Variables du protocole de régénération
+        # Regeneration protocol variables
         self.regeneration_in_progress = False
-        self.regeneration_step = 0  # 0: non démarré, 1: vérification stabilité CO2, 2: régénération active, 3: terminée
+        self.regeneration_step = 0  # 0: not started, 1: checking CO2 stability, 2: regeneration active, 3: completed
         self.co2_stability_start_time = None
         self.regeneration_start_time = None
-        self.co2_stable_value = None  # Pour stocker la valeur de référence CO2 pour la vérification de stabilité
+        self.co2_stable_value = None  # To store the reference CO2 value for stability check
         
-        # Horodatages des événements clés dans le protocole de régénération (pour les marqueurs de tracé)
+        # Timestamps for key events in the regeneration protocol (for plotting markers)
         self.regeneration_timestamps = {
             'r0_actualized': None,          # Moment où R0 est actualisé
             'co2_stability_started': None,  # Moment où on commence à vérifier la stabilité CO2
@@ -181,69 +177,34 @@ class MeasurementManager:
         if last_tcons is not None:
             self.last_set_Tcons = last_tcons
     
-    async def schedule_delayed_action(self, action_id, delay_seconds, action_func, *args, **kwargs):
-        """
-        Planifie une action à exécuter après un délai, sans bloquer le thread principal
-        
-        Args:
-            action_id: Identifiant unique pour cette action
-            delay_seconds: Délai en secondes avant d'exécuter l'action
-            action_func: Fonction à exécuter
-            *args, **kwargs: Arguments pour la fonction
-        """
-        import asyncio
-        
-        # Annuler toute action existante avec le même ID
-        if action_id in self.delayed_actions:
-            self.delayed_actions[action_id].cancel()
-            
-        # Créer une nouvelle tâche asynchrone
-        loop = asyncio.get_event_loop()
-        task = loop.create_task(self._run_delayed_action(delay_seconds, action_func, *args, **kwargs))
-        self.delayed_actions[action_id] = task
-        
-        # Ajouter un callback pour nettoyer l'entrée dans le dictionnaire une fois terminée
-        def cleanup_task(task):
-            if action_id in self.delayed_actions:
-                del self.delayed_actions[action_id]
-        
-        task.add_done_callback(cleanup_task)
-        return task
-    
-    async def _run_delayed_action(self, delay_seconds, action_func, *args, **kwargs):
-        """Fonction interne pour exécuter une action après un délai"""
-        import asyncio
-        await asyncio.sleep(delay_seconds)
-        return action_func(*args, **kwargs)
-    
     def read_conductance(self):
-        """Lire les données de conductance depuis le Keithley"""
+        """Read conductance data from Keithley"""
         current_time = time.time()
         
         # Vérifier si le Keithley est disponible
         if self.keithley is None:
-            print("Avertissement: Tentative de lecture de conductance mais l'appareil Keithley n'est pas disponible")
+            print("Warning: Attempting to read conductance but Keithley device is not available")
             return None
         
-        # Lire la résistance depuis le Keithley
+        # Read resistance from Keithley
         try:
             resistance = self.keithley.read_resistance()
             if resistance is None or resistance == 0.0:
                 conductance = float('inf')
             else:
-                conductance = (1 / resistance) * 1e6  # Conversion en µS
+                conductance = (1 / resistance) * 1e6  # Convert to µS
         except Exception as e:
-            print(f"Erreur lors de la lecture de conductance: {e}")
+            print(f"Error reading conductance: {e}")
             return None
         
-        # Initialiser start_time seulement quand on obtient réellement des données à tracer
+        # Only initialize start_time when we actually get data to plot
         if self.start_time_conductance is None:
             self.start_time_conductance = current_time
         
-        # Calculer l'horodatage
+        # Calculate timestamp
         timestamp = current_time - self.start_time_conductance - self.elapsed_time_conductance
         
-        # Stocker les données
+        # Store data
         self.timeList.append(timestamp)
         self.conductanceList.append(conductance)
         self.resistanceList.append(resistance)
@@ -256,30 +217,30 @@ class MeasurementManager:
     
     def read_arduino_status_only(self):
         """
-        Lire les états des broches Arduino sans stocker les données CO2/température/humidité
-        Returns: True si les états des broches ont été mis à jour, False sinon
+        Read pin states from Arduino without storing CO2/temperature/humidity data
+        Returns: True if pin states were updated, False otherwise
         """
         line = self.arduino.read_line()
         
-        # Vérifier les messages d'état du capteur (broches VR, VS, TO, TF)
+        # Check for sensor status messages (VR, VS, TO, TF pins)
         if line and "VR:" in line and "VS:" in line and "TO:" in line and "TF:" in line:
             try:
-                # Analyser les états individuels des broches
+                # Parse individual pin states
                 vr_part = line.split("VR:")[1].split()[0]
                 vs_part = line.split("VS:")[1].split()[0]
                 to_part = line.split("TO:")[1].split()[0]
                 tf_part = line.split("TF:")[1].split()[0]
                 
-                # Clarifier l'analyse de l'état (HIGH = True, LOW = False)
+                # Clarify status parsing (HIGH = True, LOW = False)
                 vr_state = vr_part == "HIGH"
                 vs_state = vs_part == "HIGH"
                 to_state = to_part == "HIGH"
                 tf_state = tf_part == "HIGH"
                 
-                # Afficher l'état pour le débogage
-                print(f"États des broches: VR={vr_state}, VS={vs_state}, TO={to_state}, TF={tf_state}")
+                # Print status for debugging
+                print(f"Pin states: VR={vr_state}, VS={vs_state}, TO={to_state}, TF={tf_state}")
                 
-                # Stocker les états des broches pour la mise à jour de l'interface utilisateur
+                # Store the pin states for UI updating
                 self.pin_states = {
                     'vr': vr_state,  # Vérin Rentré
                     'vs': vs_state,  # Vérin Sorti
@@ -288,7 +249,7 @@ class MeasurementManager:
                 }
                 return True
             except Exception as e:
-                print(f"Erreur lors de l'analyse des états des broches: {e}, ligne: {line}")
+                print(f"Error parsing pin states: {e}, line: {line}")
                 return False
         
         # Ignorer les données CO2/temp/humidity si la ligne commence par @
@@ -299,8 +260,8 @@ class MeasurementManager:
     
     def read_arduino_data(self):
         """
-        Lire les données CO2, température, humidité depuis l'Arduino et les stocker
-        Appelé uniquement lorsque les mesures sont actives
+        Read CO2, temperature, humidity data from Arduino and store it
+        Only called when measurements are active
         """
         current_time = time.time()
         
@@ -308,30 +269,30 @@ class MeasurementManager:
         if not hasattr(self.arduino, 'read_line') or self.arduino.device is None:
             return None
         
-        # Initialiser start_time uniquement lors de la collecte du premier point de données
-        # au lieu de lorsque la fonction est appelée pour la première fois
+        # Initialize start_time only when first data point is collected
+        # instead of when the function is first called
         line = self.arduino.read_line()
         
         # Si pas de ligne, c'est peut-être un Arduino simulé ou pas de données
         if not line:
             return None
         
-        # Gérer les mises à jour d'état des broches si elles arrivent
+        # Handle pin state updates if they come through
         if line and "VR:" in line and "VS:" in line and "TO:" in line and "TF:" in line:
             try:
-                # Analyser les états individuels des broches
+                # Parse individual pin states
                 vr_part = line.split("VR:")[1].split()[0]
                 vs_part = line.split("VS:")[1].split()[0]
                 to_part = line.split("TO:")[1].split()[0]
                 tf_part = line.split("TF:")[1].split()[0]
                 
-                # Clarifier l'analyse de l'état (HIGH = True, LOW = False)
+                # Clarify status parsing (HIGH = True, LOW = False)
                 vr_state = vr_part == "HIGH"
                 vs_state = vs_part == "HIGH"
                 to_state = to_part == "HIGH"
                 tf_state = tf_part == "HIGH"
                 
-                # Stocker les états des broches pour la mise à jour de l'interface utilisateur
+                # Store the pin states for UI updating
                 self.pin_states = {
                     'vr': vr_state,  # Vérin Rentré
                     'vs': vs_state,  # Vérin Sorti
@@ -339,9 +300,9 @@ class MeasurementManager:
                     'tf': tf_state   # Trappe Fermée
                 }
             except Exception as e:
-                print(f"Erreur lors de l'analyse des états des broches: {e}, ligne: {line}")
+                print(f"Error parsing pin states: {e}, line: {line}")
             
-            return None  # Pas de données CO2 dans ce message
+            return None  # No CO2 data in this message
         
         if not line.startswith('@'):
             return None
@@ -350,7 +311,7 @@ class MeasurementManager:
         if len(data) != 3:
             return None
         
-        # Analyser les données
+        # Parse data
         try:
             co2 = float(data[0])
             temperature = float(data[1])
@@ -358,14 +319,14 @@ class MeasurementManager:
         except ValueError:
             return None
         
-        # Initialiser start_time uniquement lorsqu'on obtient réellement des données à tracer
+        # Only initialize start_time when we actually get data to plot
         if self.start_time_co2_temp_humidity is None:
             self.start_time_co2_temp_humidity = current_time
         
-        # Calculer l'horodatage
+        # Calculate timestamp
         timestamp = current_time - self.start_time_co2_temp_humidity - self.elapsed_time_co2_temp_humidity
         
-        # Stocker les données
+        # Store data
         self.timestamps_co2.append(timestamp)
         self.values_co2.append(co2)
         self.timestamps_temp.append(timestamp)
@@ -387,12 +348,12 @@ class MeasurementManager:
         return self.read_arduino_data()
     
     def read_res_temp(self):
-        """Lire les données de température de résistance"""
+        """Read resistance temperature data"""
         current_time = time.time()
         
         # Vérifier si le dispositif de régénération est disponible
         if self.regen is None or not hasattr(self.regen, 'device') or self.regen.device is None:
-            print("Avertissement: Tentative de lecture de res_temp mais le dispositif de régénération n'est pas disponible")
+            print("Warning: Attempting to read res_temp but regeneration device is not available")
             return None
         
         try:
@@ -408,17 +369,17 @@ class MeasurementManager:
                     Tcons_value = self.last_set_Tcons
                 
         except (ValueError, TypeError) as e:
-            print(f"Erreur lors de la lecture de la température: {e}, raw_tcons={raw_tcons if 'raw_tcons' in locals() else 'N/A'}")
+            print(f"Error reading temperature: {e}, raw_tcons={raw_tcons if 'raw_tcons' in locals() else 'N/A'}")
             return None
         
-        # Initialiser start_time uniquement lorsqu'on obtient réellement des données à tracer
+        # Only initialize start_time when we actually get data to plot
         if self.start_time_res_temp is None:
             self.start_time_res_temp = current_time
         
-        # Calculer l'horodatage
+        # Calculate timestamp
         timestamp = current_time - self.start_time_res_temp - self.elapsed_time_res_temp
         
-        # Stocker les données
+        # Store data
         self.timestamps_res_temp.append(timestamp)
         self.temperatures.append(temperature_value)
         self.Tcons_values.append(Tcons_value)
@@ -430,10 +391,10 @@ class MeasurementManager:
         }
     
     def push_open_sensor(self):
-        """Pousser/ouvrir le capteur"""
+        """Push/open the sensor"""
         # Vérifier si l'Arduino est disponible
         if not hasattr(self.arduino, 'send_command') or self.arduino.device is None:
-            print("Avertissement: Tentative de pousser/ouvrir le capteur mais l'Arduino n'est pas disponible")
+            print("Warning: Attempting to push/open sensor but Arduino is not available")
             return False
             
         self.arduino.send_command("ouvrir\n")
@@ -441,10 +402,10 @@ class MeasurementManager:
         return True
         
     def retract_close_sensor(self):
-        """Rétracter/fermer le capteur"""
+        """Retract/close the sensor"""
         # Vérifier si l'Arduino est disponible
         if not hasattr(self.arduino, 'send_command') or self.arduino.device is None:
-            print("Avertissement: Tentative de rétracter/fermer le capteur mais l'Arduino n'est pas disponible")
+            print("Warning: Attempting to retract/close sensor but Arduino is not available")
             return False
             
         self.arduino.send_command("fermer\n")
@@ -452,10 +413,10 @@ class MeasurementManager:
         return True
         
     def init_system(self):
-        """Initialiser le système"""
+        """Initialize the system"""
         # Vérifier si l'Arduino est disponible
         if not hasattr(self.arduino, 'send_command') or self.arduino.device is None:
-            print("Avertissement: Tentative d'initialisation du système mais l'Arduino n'est pas disponible")
+            print("Warning: Attempting to initialize system but Arduino is not available")
             return False
             
         self.arduino.send_command("init\n")
@@ -525,16 +486,16 @@ class MeasurementManager:
     
     def detect_increase(self):
         """
-        Détecter l'augmentation de la conductance
-        Returns: True si une augmentation est détectée, False sinon
+        Detect increase in conductance
+        Returns: True if increase detected, False otherwise
         """
         if self.increase_detected or len(self.conductanceList) < 10:
             return False
         
-        # Calculer la pente sur les 10 derniers points
+        # Calculate slope over last 10 points
         time_window = self.timeList[-10:]
         conductance_window = self.conductanceList[-10:]
-        slope = np.polyfit(time_window, conductance_window, 1)[0]  # pente en S/s
+        slope = np.polyfit(time_window, conductance_window, 1)[0]  # slope in S/s
         
         if INCREASE_SLOPE_MIN <= slope <= INCREASE_SLOPE_MAX:
             self.increase_detected = True
@@ -548,15 +509,15 @@ class MeasurementManager:
     
     def detect_stabilization(self):
         """
-        Détecter la stabilisation de la conductance
-        Returns: True si une stabilisation est détectée, False sinon
+        Detect stabilization in conductance
+        Returns: True if stabilization detected, False otherwise
         """
         if not self.increase_detected or self.stabilized or len(self.timeList) < 10:
             return False
         
         current_time = self.timeList[-1]
         
-        # Trouver les indices pour la fenêtre glissante
+        # Find indices for sliding window
         start_idx = None
         end_idx = None
         
@@ -576,12 +537,12 @@ class MeasurementManager:
             if len(window_time) > 1:
                 current_slope = np.polyfit(window_time, window_conductance, 1)[0]
                 
-                # Mettre à jour la pente maximale si nécessaire
+                # Update maximum slope if needed
                 if current_slope > self.max_slope_value:
                     self.max_slope_value = current_slope
                     self.max_slope_time = current_time
                 
-                # Vérifier si stabilisé
+                # Check if stabilized
                 if (current_time - self.max_slope_time >= STABILITY_DURATION and 
                     abs(current_slope) < INCREASE_SLOPE_MIN/2):
                     self.stabilized = True
@@ -593,10 +554,10 @@ class MeasurementManager:
         
     def detect_co2_peak(self):
         """
-        Détecter le pic de CO2 après qu'une augmentation a été détectée
+        Detect CO2 peak after an increase was detected
         
         Returns:
-            None: Met à jour le drapeau self.co2_peak_detected si un pic est détecté
+            None: Updates self.co2_peak_detected flag if a peak is detected
         """
         if not self.co2_peak_detected and self.co2_increase_detected and len(self.values_co2) >= 5:
             current_co2 = self.values_co2[-1]
@@ -649,107 +610,68 @@ class MeasurementManager:
             
         return False
     
-    async def _delay_action(self, delay, callback_func, *args, **kwargs):
-        """Exécute une action après un délai sans bloquer le thread principal"""
-        import asyncio
-        await asyncio.sleep(delay)
-        return callback_func(*args, **kwargs)
-        
-    def schedule_delayed_action(self, action_id, delay_seconds, callback_func, *args, **kwargs):
-        """
-        Planifie une action à exécuter après un délai sans bloquer
-        
-        Args:
-            action_id: Identifiant unique pour cette action
-            delay_seconds: Délai en secondes
-            callback_func: Fonction à exécuter après le délai
-            *args, **kwargs: Arguments pour la fonction
-        """
-        # Cette méthode est utilisée pour remplacer les appels à time.sleep
-        import threading
-        
-        def execute_after_delay():
-            import time
-            time.sleep(delay_seconds)
-            return callback_func(*args, **kwargs)
-        
-        # Créer et démarrer un thread pour l'action différée
-        thread = threading.Thread(target=execute_after_delay)
-        thread.daemon = True
-        thread.start()
-        return thread
-    
     def automatic_mode_handler(self):
         """
-        Gérer la logique du mode automatique
-        Returns: True si une action a été prise, False sinon
+        Handle automatic mode logic
+        Returns: True if action was taken, False otherwise
         """
-        # Vérifier l'augmentation de la conductance
+        # Check for increase in conductance
         if self.detect_increase():
             return True
             
-        # Vérifier la stabilisation
+        # Check for stabilization
         if self.detect_stabilization():
-            # Fermer la vanne après stabilisation
+            # Close valve after stabilization
             self.retract_close_sensor()
-            print("Auto: Fermeture de la vanne")
+            print("Auto: Closing valve")
+            time.sleep(VALVE_DELAY)
             
-            # Planifier les actions suivantes après un délai au lieu de bloquer avec time.sleep
-            def delayed_actions_after_valve():
-                # Lire et mettre à jour R0
-                R0 = self.read_R0()
-                if R0 is not None and R0 < R0_THRESHOLD:
-                    # Actualiser R0 en l'écrivant dans les paramètres
-                    self.set_R0(str(R0))
-                    print(f"Auto: R0 mis à jour à {R0}")
-                    
-                    # Mise à jour de Tcons à température élevée
-                    success = self.set_Tcons(str(REGENERATION_TEMP))
-                    if not success:
-                        print(f"Auto: Erreur lors de la définition de Tcons à {REGENERATION_TEMP}°C")
-                elif R0 is not None and R0 == 1000:
-                    print("Erreur - R0 non détecté")
-                else:
-                    print("Auto: Erreur - R0 trop élevé (> 12)")
+            # Read and update R0
+            R0 = self.read_R0()
+            if R0 is not None and R0 < R0_THRESHOLD:
+                # Actualiser R0 en l'écrivant dans les paramètres
+                self.set_R0(str(R0))
+                print(f"Auto: R0 updated to {R0}")
+                
+                # Update Tcons to high temperature
+                success = self.set_Tcons(str(REGENERATION_TEMP))
+                if not success:
+                    print(f"Auto: Erreur lors de la définition de Tcons à {REGENERATION_TEMP}°C")
+            elif R0 is not None and R0 == 1000:
+                print("Error - R0 not detected")
+            else:
+                print("Auto: Error - R0 too high (> 12)")
             
-            # Lancer les actions avec délai sans bloquer
-            self.schedule_delayed_action("post_stabilization", VALVE_DELAY, delayed_actions_after_valve)
             return True
             
-        # Vérifier si la conductance est redescendue à 0 après stabilisation
+        # Check if conductance has returned to 0 after stabilization
         if self.stabilized and len(self.conductanceList) > 0 and self.conductanceList[-1] <= 1e-6:
-            print(f"Auto: Conductance descendue sous 1 µS ({self.conductanceList[-1]*1e6:.2f} µS), attente 5 minutes...")
+            print(f"Auto: Conductance decreased below 1 µS ({self.conductanceList[-1]*1e6:.2f} µS), waiting 5 minutes...")
             
-            # Définir Tcons à température basse
+            # Set Tcons to low temperature
             success = self.set_Tcons(str(TCONS_LOW))
             if not success:
                 print(f"Auto: Erreur lors de la définition de Tcons à {TCONS_LOW}°C")
             
-            # Planifier les actions suivantes après STABILITY_DURATION sans bloquer
-            def delayed_actions_after_stability():
-                print("Auto: Cycle terminé. Prêt pour le prochain cycle.")
-                
-                # Ouvrir la vanne
-                self.push_open_sensor()
-                print("Auto: Ouverture de la vanne")
-                
-                # Planifier les actions finales après un autre délai
-                def reset_detection_flags():
-                    # Réinitialiser les indicateurs de détection
-                    self.increase_detected = False
-                    self.stabilized = False
-                
-                # Lancer les actions finales avec un délai sans bloquer
-                self.schedule_delayed_action("reset_flags", VALVE_DELAY, reset_detection_flags)
+            time.sleep(STABILITY_DURATION)
             
-            # Lancer les actions après STABILITY_DURATION
-            self.schedule_delayed_action("post_conductance_decrease", STABILITY_DURATION, delayed_actions_after_stability)
+            print("Auto: Cycle completed. Ready for next cycle.")
+            
+            # Open valve
+            self.push_open_sensor()
+            print("Auto: Opening valve")
+            time.sleep(VALVE_DELAY)
+            
+            # Reset detection flags
+            self.increase_detected = False
+            self.stabilized = False
+            
             return True
             
         return False
     
     def get_last_timestamps(self):
-        """Obtenir les derniers horodatages pour tous les types de données"""
+        """Get the latest timestamps for all data types"""
         return {
             'conductance': self.timeList[-1] if self.timeList else None,
             'co2': self.timestamps_co2[-1] if self.timestamps_co2 else None,
@@ -770,9 +692,9 @@ class MeasurementManager:
             print("Regeneration protocol already in progress")
             return False
             
-        # Vérifier que nous avons des lectures CO2
+        # Verify we have CO2 readings
         if not self.values_co2:
-            print("Aucune lecture CO2 disponible - impossible de démarrer le protocole de régénération")
+            print("No CO2 readings available - can't start regeneration protocol")
             return False
         
         # Lire R0 avant de démarrer pour avoir une valeur initiale
@@ -788,10 +710,10 @@ class MeasurementManager:
             if self.start_time_co2_temp_humidity is not None:
                 self.regeneration_timestamps['r0_actualized'] = current_time - self.start_time_co2_temp_humidity - self.elapsed_time_co2_temp_humidity
             
-        # Initialiser l'état de régénération
+        # Initialize regeneration state
         self.regeneration_in_progress = True
-        self.regeneration_step = 1  # Vérification de la stabilité du CO2
-        self.co2_stability_start_time = None  # Sera défini lors de la première lecture stable
+        self.regeneration_step = 1  # Checking CO2 stability
+        self.co2_stability_start_time = None  # Will be set when first stable reading is found
         self.regeneration_start_time = None
         self.co2_stable_value = None
         
@@ -875,26 +797,26 @@ class MeasurementManager:
         
     def check_co2_stability(self):
         """
-        Vérifier si les lectures CO2 sont stables (±2 ppm pendant 2 minutes)
+        Check if CO2 readings are stable (±2 ppm for 2 minutes)
         
         Returns:
-            bool: True si le CO2 est stable pendant la durée requise, False sinon
+            bool: True if CO2 is stable for the required duration, False otherwise
         """
         if not self.regeneration_in_progress or self.regeneration_step != 1:
             return False
             
-        # Besoin d'au moins quelques lectures
+        # Need at least a few readings
         if len(self.values_co2) < 3:
             return False
             
         current_time = time.time()
         latest_co2 = self.values_co2[-1]
         
-        # Si nous n'avons pas encore de valeur de référence stable, utiliser la valeur actuelle
+        # If we don't have a reference stable value yet, use the current value
         if self.co2_stable_value is None:
             self.co2_stable_value = latest_co2
             self.co2_stability_start_time = current_time
-            print(f"Définition de la valeur de référence CO2 initiale: {latest_co2} ppm")
+            print(f"Setting initial CO2 reference value: {latest_co2} ppm")
             
             # Enregistrer le timestamp du début de la vérification de stabilité CO2
             if self.start_time_co2_temp_humidity is not None:

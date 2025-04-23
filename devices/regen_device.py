@@ -26,18 +26,13 @@ class RegenDevice:
         """Connexion à l'appareil de régénération"""
         try:
             if not self.port:
-                raise ValueError("Port série non spécifié")
+                raise ValueError("Serial port not specified")
             
             self.device = serial.Serial(self.port, self.baud_rate, timeout=self.timeout)
             return True
         except Exception as e:
-            print(f"Erreur lors de la connexion à l'appareil de régénération: {e}")
+            print(f"Error connecting to regeneration device: {e}")
             return False
-    
-    async def _async_delay(self, seconds):
-        """Délai asynchrone pour ne pas bloquer l'exécution"""
-        import asyncio
-        await asyncio.sleep(seconds)
     
     def read_variable(self, command, address):
         """
@@ -54,39 +49,21 @@ class RegenDevice:
             if not self.device:
                 return None
             
-            # Définir un timeout plus court pour cette opération
-            original_timeout = self.device.timeout
-            self.device.timeout = 0.5  # Timeout réduit pour éviter les blocages
-            
             self.device.write(command.encode())
             self.device.write(address.encode())
+            time.sleep(0.1)
+            response = self.device.read(self.device.in_waiting).decode().strip()
             
-            # Au lieu de time.sleep bloquant, on utilise une approche non bloquante
-            # On attend un court instant que les données soient disponibles
-            import select
-            readable, _, _ = select.select([self.device], [], [], 0.1)
-            
-            if readable:
-                response = self.device.read(self.device.in_waiting).decode().strip()
-                
-                # Restaurer le timeout original
-                self.device.timeout = original_timeout
-                
-                if response.startswith('L'):
-                    cleaned_response = response[1:].strip()
-                    if cleaned_response.startswith('a') or cleaned_response.startswith('d'):
-                        cleaned_response = cleaned_response[1:].strip()
-                    if '.' not in cleaned_response:
-                        cleaned_response += '.0'
-                    return cleaned_response
-                return "0.0"
-            else:
-                # Restaurer le timeout original même si aucune donnée n'est disponible
-                self.device.timeout = original_timeout
-                return "0.0"
-                
+            if response.startswith('L'):
+                cleaned_response = response[1:].strip()
+                if cleaned_response.startswith('a') or cleaned_response.startswith('d'):
+                    cleaned_response = cleaned_response[1:].strip()
+                if '.' not in cleaned_response:
+                    cleaned_response += '.0'
+                return cleaned_response
+            return "0.0"
         except Exception as e:
-            print(f"Erreur lors de la lecture de variable depuis l'appareil de régénération: {e}")
+            print(f"Error reading variable from regeneration device: {e}")
             return None
     
     def write_parameter(self, command, address, value):
@@ -108,18 +85,16 @@ class RegenDevice:
             command_str = f"{command}{address}{value}\n"
             self.device.write(command_str.encode())
             
-            # Au lieu de time.sleep bloquant, on utilise une approche non bloquante
-            # On attend un court instant que les données soient disponibles
-            import select
-            readable, _, _ = select.select([self.device], [], [], 0.1)
+            # Attendre un court instant pour s'assurer que la commande est traitée
+            time.sleep(0.1)
             
             # Vider tout buffer de réception si nécessaire
-            if readable and self.device.in_waiting > 0:
+            if self.device.in_waiting > 0:
                 response = self.device.read(self.device.in_waiting)
                 
             return True
         except Exception as e:
-            print(f"Erreur lors de l'écriture de paramètre dans l'appareil de régénération: {e}")
+            print(f"Error writing parameter to regeneration device: {e}")
             return False
     
     def close(self):
@@ -127,10 +102,8 @@ class RegenDevice:
         if self.device:
             try:
                 self.device.close()
-                self.device = None  # Libérer explicitement la référence
                 return True
             except Exception as e:
-                print(f"Erreur lors de la fermeture de la connexion à l'appareil de régénération: {e}")
-                self.device = None  # Libérer la référence même en cas d'erreur
+                print(f"Error closing regeneration device connection: {e}")
                 return False
         return True
