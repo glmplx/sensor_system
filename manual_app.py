@@ -585,14 +585,8 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                 print("Création de la feuille 'Essais cumulés' pour temp/resistance...")
                 data_handler._update_cumulative_sheet(data_handler.temp_res_file)
                 
-            # Ajouter les graphiques aux fichiers Excel
-            if files_initialized:
-                if data_handler.conductance_file:
-                    data_handler.add_charts_to_excel(data_handler.conductance_file)
-                if data_handler.co2_temp_humidity_file:
-                    data_handler.add_charts_to_excel(data_handler.co2_temp_humidity_file)
-                if data_handler.temp_res_file:
-                    data_handler.add_charts_to_excel(data_handler.temp_res_file)
+            # La création de graphiques dans les fichiers Excel est désactivée
+            # Les graphiques peuvent être créés directement dans Excel après l'exportation
                 
             # Proposer à l'utilisateur de renommer le dossier de données si des fichiers ont été initialisés
             if files_initialized and hasattr(data_handler, 'test_folder_path') and data_handler.test_folder_path is not None:
@@ -668,10 +662,21 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         print("Arrêt du programme")
         sys.exit(0)
     
+    # Function to toggle all measurements together
+    def toggle_all_measurements(event):
+        # Call toggle functions only for available measurements
+        if measure_conductance:
+            toggle_conductance(event)
+        if measure_co2:
+            toggle_co2_temp_humidity(event)
+        if measure_regen:
+            toggle_res_temp(event)
+    
     # Connect event handlers
     plot_manager.connect_button('conductance', toggle_conductance)
     plot_manager.connect_button('co2_temp_humidity', toggle_co2_temp_humidity)
     plot_manager.connect_button('res_temp', toggle_res_temp)
+    plot_manager.connect_button('start_all', toggle_all_measurements)
     plot_manager.connect_button('raz_conductance', raz_conductance)
     plot_manager.connect_button('raz_co2_temp_humidity', raz_co2_temp_humidity)
     plot_manager.connect_button('raz_res_temp', raz_res_temp)
@@ -878,14 +883,8 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                 print("Création de la feuille 'Essais cumulés' pour temp/resistance...")
                 data_handler._update_cumulative_sheet(data_handler.temp_res_file)
             
-            # Ajouter les graphiques aux fichiers Excel
-            if files_initialized:
-                if data_handler.conductance_file:
-                    data_handler.add_charts_to_excel(data_handler.conductance_file)
-                if data_handler.co2_temp_humidity_file:
-                    data_handler.add_charts_to_excel(data_handler.co2_temp_humidity_file)
-                if data_handler.temp_res_file:
-                    data_handler.add_charts_to_excel(data_handler.temp_res_file)
+            # La création de graphiques dans les fichiers Excel est désactivée
+            # Les graphiques peuvent être créés directement dans Excel après l'exportation
             
             # Proposer à l'utilisateur de renommer le dossier de données
             if files_initialized and hasattr(data_handler, 'test_folder_path') and data_handler.test_folder_path is not None:

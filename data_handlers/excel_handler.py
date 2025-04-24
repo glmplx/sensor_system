@@ -532,168 +532,18 @@ class ExcelHandler:
         
     def add_charts_to_excel(self, file_path):
         """
-        Ajoute des graphiques aux feuilles Excel existantes
+        Fonction désactivée pour éviter les problèmes de corruption des fichiers Excel
+        Les graphiques peuvent être créés directement dans Excel après l'exportation
         
         Args:
-            file_path: Chemin du fichier Excel à modifier
+            file_path: Chemin du fichier Excel
         """
         if not os.path.exists(file_path):
             return False
             
-        try:
-            # Temporairement désactivé pour résoudre les problèmes de corruption de fichiers
-            print(f"Création de graphiques dans le fichier Excel désactivée pour {file_path}")
-            return True
-            
-            # Code original commenté
-            """
-            wb = load_workbook(file_path)
-            
-            # Traiter différemment selon le type de fichier
-            if "conductance" in os.path.basename(file_path).lower():
-                self._add_conductance_charts(wb)
-            elif "co2_temp_humidity" in os.path.basename(file_path).lower():
-                self._add_co2_temp_humidity_charts(wb)
-            elif "temperature_resistance" in os.path.basename(file_path).lower():
-                self._add_temp_res_charts(wb)
-                
-            wb.save(file_path)
-            """
-            
-            return True
-        except Exception as e:
-            print(f"Error adding charts to Excel: {e}")
-            return False
-    
-    def _add_co2_temp_humidity_charts(self, wb):
-        """
-        Ajoute des graphiques combinés CO2/Température/Humidité
-        """
-        for sheet_name in wb.sheetnames:
-            if sheet_name == "_temp":
-                continue
-                
-            ws = wb[sheet_name]
-            
-            # Créer un graphique linéaire
-            chart1 = LineChart()
-            chart1.title = f"CO2/Température/Humidité - {sheet_name}"
-            chart1.style = 13
-            chart1.y_axis.title = 'CO2 (ppm)'
-            chart1.x_axis.title = 'Temps (minutes)'
-            
-            # Ajouter un second axe Y
-            chart2 = LineChart()
-            chart2.style = 13
-            chart2.y_axis.title = "Température (°C) / Humidité (%)"
-            
-            # Déterminer les données
-            max_row = ws.max_row
-            if max_row <= 1:  # Pas de données
-                continue
-                
-            # Références aux données
-            x_data = Reference(ws, min_col=1, min_row=2, max_row=max_row)
-            y1_data = Reference(ws, min_col=3, min_row=1, max_row=max_row)  # CO2
-            y2_data = Reference(ws, min_col=4, min_row=1, max_row=max_row)  # Température
-            y3_data = Reference(ws, min_col=5, min_row=1, max_row=max_row)  # Humidité
-            
-            # Ajouter les données aux graphiques
-            chart1.add_data(y1_data, titles_from_data=True)
-            chart2.add_data(y2_data, titles_from_data=True)
-            chart2.add_data(y3_data, titles_from_data=True)
-            
-            # Configurer l'axe X
-            chart1.set_categories(x_data)
-            chart2.set_categories(x_data)
-            
-            # Combiner les graphiques
-            chart1.y_axis.crosses = "max"
-            chart2.y_axis.crosses = "min"
-            chart1 += chart2
-            
-            # Positionner le graphique
-            ws.add_chart(chart1, "G2")
-    
-    def _add_conductance_charts(self, wb):
-        """
-        Ajoute des graphiques pour les données de conductance
-        """
-        for sheet_name in wb.sheetnames:
-            if sheet_name == "_temp":
-                continue
-                
-            ws = wb[sheet_name]
-            max_row = ws.max_row
-            if max_row <= 1:
-                continue
-                
-            # Graphique conductance
-            chart = LineChart()
-            chart.title = f"Conductance - {sheet_name}"
-            chart.style = 13
-            chart.y_axis.title = 'Conductance (µS)'
-            chart.x_axis.title = 'Temps (minutes)'
-            
-            x_data = Reference(ws, min_col=1, min_row=2, max_row=max_row)
-            y_data = Reference(ws, min_col=3, min_row=1, max_row=max_row)
-            
-            chart.add_data(y_data, titles_from_data=True)
-            chart.set_categories(x_data)
-            ws.add_chart(chart, "G2")
-            
-            # Graphique résistance
-            chart2 = LineChart()
-            chart2.title = f"Résistance - {sheet_name}"
-            chart2.style = 13
-            chart2.y_axis.title = 'Résistance (Ohms)'
-            chart2.x_axis.title = 'Temps (minutes)'
-            
-            y2_data = Reference(ws, min_col=4, min_row=1, max_row=max_row)
-            
-            chart2.add_data(y2_data, titles_from_data=True)
-            chart2.set_categories(x_data)
-            ws.add_chart(chart2, "G20")
-    
-    def _add_temp_res_charts(self, wb):
-        """
-        Ajoute des graphiques pour les données température/résistance
-        """
-        for sheet_name in wb.sheetnames:
-            if sheet_name == "_temp":
-                continue
-                
-            ws = wb[sheet_name]
-            max_row = ws.max_row
-            if max_row <= 1:
-                continue
-                
-            # Graphique combiné
-            chart1 = LineChart()
-            chart1.title = f"Température - {sheet_name}"
-            chart1.style = 13
-            chart1.y_axis.title = 'Température (°C)'
-            chart1.x_axis.title = 'Temps (minutes)'
-            
-            chart2 = LineChart()
-            chart2.style = 13
-            chart2.y_axis.title = "Tcons (°C)"
-            
-            x_data = Reference(ws, min_col=1, min_row=2, max_row=max_row)
-            y1_data = Reference(ws, min_col=3, min_row=1, max_row=max_row)  # Température mesurée
-            y2_data = Reference(ws, min_col=4, min_row=1, max_row=max_row)  # Tcons
-            
-            chart1.add_data(y1_data, titles_from_data=True)
-            chart2.add_data(y2_data, titles_from_data=True)
-            
-            chart1.set_categories(x_data)
-            chart2.set_categories(x_data)
-            
-            chart1.y_axis.crosses = "max"
-            chart2.y_axis.crosses = "min"
-            chart1 += chart2
-            
-            ws.add_chart(chart1, "G2")
+        # Création de graphiques dans les fichiers Excel désactivée
+        print(f"Création de graphiques dans le fichier Excel désactivée pour {file_path}")
+        return True
 
     def _should_create_cumulative_sheet(self, file_path):
         """Détermine si une feuille 'Essais cumulés' doit être créée"""

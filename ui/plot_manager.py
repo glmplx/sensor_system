@@ -281,6 +281,13 @@ class PlotManager:
         ax_button_quit = plt.axes([0.89, 0.01, button_width, button_height])
         self.buttons['quit'] = Button(ax_button_quit, 'Quitter')
         
+        # Start all measurements button (green)
+        ax_button_start_all = plt.axes([0.38, 0.11, button_width, button_height])
+        start_all_button = Button(ax_button_start_all, 'Start/Stop All', color='lightgreen')
+        start_all_button.ax.set_facecolor('lightgreen')
+        start_all_button.color = 'lightgreen'
+        self.buttons['start_all'] = start_all_button
+        
         # Status indicators
         self.setup_indicators()
         
@@ -906,6 +913,10 @@ class PlotManager:
             # Boutons liés à R0 et Tcons (dépendent de la régénération)
             elif button_name in ['set_R0', 'update_R0', 'set_Tcons']:
                 button.ax.set_visible(measure_regen)
+                
+            # Le bouton "Start/Stop Tout" est toujours visible si au moins une mesure est disponible
+            elif button_name == 'start_all':
+                button.ax.set_visible(measure_conductance or measure_co2 or measure_regen)
         
         # Masquer également les textboxes et zones d'affichage liées à la régénération
         if not measure_regen:
