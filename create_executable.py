@@ -113,9 +113,9 @@ exe = EXE(
         if not os.path.exists(readme_path):
             # Create a README file for the executable
             with open(readme_path, 'w') as f:
-                f.write("""# Système de capteurs - Exécutable
+                f.write("""# Systeme de capteurs - Executable
 
-Cet exécutable contient le système complet de capteurs. Il ne nécessite pas d'installation de Python ni de bibliothèques supplémentaires.
+Cet exécutable contient le systeme complet de capteurs. Il ne nécessite pas d'installation de Python ni de bibliothèques supplémentaires.
 
 ## Utilisation
 

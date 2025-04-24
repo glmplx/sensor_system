@@ -77,14 +77,26 @@ class ExcelHandler:
             
         excel_folder_path = os.path.join(application_path, EXCEL_BASE_DIR)
         
-        if not os.path.exists(excel_folder_path):
-            os.makedirs(excel_folder_path)
-        
-        mode_prefix = "Manual" if self.mode == "manual" else "Auto"
-        test_folder_name = f"Test-{mode_prefix}-{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}"
-        self.test_folder_path = os.path.join(excel_folder_path, test_folder_name)
-        
-        os.makedirs(self.test_folder_path)
+        try:
+            if not os.path.exists(excel_folder_path):
+                os.makedirs(excel_folder_path)
+            
+            mode_prefix = "Manual" if self.mode == "manual" else "Auto"
+            test_folder_name = f"Test-{mode_prefix}-{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}"
+            self.test_folder_path = os.path.join(excel_folder_path, test_folder_name)
+            
+            os.makedirs(self.test_folder_path)
+        except PermissionError:
+            # Fallback to user documents folder if program files is not writeable
+            user_docs = os.path.join(os.path.expanduser('~'), 'Documents', 'IRSN', EXCEL_BASE_DIR)
+            if not os.path.exists(user_docs):
+                os.makedirs(user_docs)
+                
+            mode_prefix = "Manual" if self.mode == "manual" else "Auto"
+            test_folder_name = f"Test-{mode_prefix}-{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}"
+            self.test_folder_path = os.path.join(user_docs, test_folder_name)
+            
+            os.makedirs(self.test_folder_path)
         return self.test_folder_path
     
     def initialize_file(self, file_type):

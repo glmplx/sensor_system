@@ -3,7 +3,7 @@ Constantes utilisées dans toute l'application
 """
 
 # Constantes de mesure
-STABILITY_DURATION = 3 * 60  # 3 minutes en secondes
+STABILITY_DURATION = 2 * 60  # 3 minutes en secondes
 INCREASE_SLOPE_MIN = 0.1  # Seuil minimum pour la pente en µS/s
 INCREASE_SLOPE_MAX = 0.7  # Seuil maximum pour la pente en µS/s
 DECREASE_SLOPE_THRESHOLD = -0.05  # Seuil pour détecter une diminution de conductance

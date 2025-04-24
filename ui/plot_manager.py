@@ -282,7 +282,7 @@ class PlotManager:
         self.buttons['quit'] = Button(ax_button_quit, 'Quitter')
         
         # Start all measurements button (green)
-        ax_button_start_all = plt.axes([0.38, 0.11, button_width, button_height])
+        ax_button_start_all = plt.axes([0.14, 0.11, button_width, button_height])
         start_all_button = Button(ax_button_start_all, 'Start/Stop All', color='lightgreen')
         start_all_button.ax.set_facecolor('lightgreen')
         start_all_button.color = 'lightgreen'

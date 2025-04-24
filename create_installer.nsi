@@ -4,7 +4,7 @@
 !include "MUI2.nsh"
 
 ; Définition des informations générales
-Name "Système de capteurs IRSN"
+Name "Systeme de capteurs IRSN"
 OutFile "SensorSystemInstaller.exe"
 InstallDir "$PROGRAMFILES\IRSN\SensorSystem"
 InstallDirRegKey HKCU "Software\IRSN\SensorSystem" ""
@@ -41,23 +41,23 @@ Section "Installation principale" SecMain
   
   ; Créer un raccourci dans le Menu Démarrer
   CreateDirectory "$SMPROGRAMS\IRSN"
-  CreateShortcut "$SMPROGRAMS\IRSN\Système de capteurs.lnk" "$INSTDIR\SensorSystem.exe"
-  CreateShortcut "$DESKTOP\Système de capteurs IRSN.lnk" "$INSTDIR\SensorSystem.exe"
+  CreateShortcut "$SMPROGRAMS\IRSN\Systeme de capteurs.lnk" "$INSTDIR\SensorSystem.exe"
+  CreateShortcut "$DESKTOP\Systeme de capteurs IRSN.lnk" "$INSTDIR\SensorSystem.exe"
   
   ; Écrire les informations d'installation dans le registre
   WriteRegStr HKCU "Software\IRSN\SensorSystem" "" $INSTDIR
   
   ; Créer la désinstallation
   WriteUninstaller "$INSTDIR\Uninstall.exe"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\IRSN_SensorSystem" "DisplayName" "Système de capteurs IRSN"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\IRSN_SensorSystem" "DisplayName" "Systeme de capteurs IRSN"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\IRSN_SensorSystem" "UninstallString" "$\"$INSTDIR\Uninstall.exe$\""
 SectionEnd
 
 ; Section de désinstallation
 Section "Uninstall"
   ; Supprimer les fichiers et dossiers
-  Delete "$SMPROGRAMS\IRSN\Système de capteurs.lnk"
-  Delete "$DESKTOP\Système de capteurs IRSN.lnk"
+  Delete "$SMPROGRAMS\IRSN\Systeme de capteurs.lnk"
+  Delete "$DESKTOP\Systeme de capteurs IRSN.lnk"
   RMDir /r "$SMPROGRAMS\IRSN"
   
   ; Demander à l'utilisateur s'il souhaite conserver les données
