@@ -587,6 +587,19 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                 
             # La création de graphiques dans les fichiers Excel est désactivée
             # Les graphiques peuvent être créés directement dans Excel après l'exportation
+
+            # Ajouter les graphiques aux fichiers Excel
+            if data_handler.conductance_file:
+                print("Ajout des graphiques pour conductance...")
+                data_handler.add_charts_to_excel(data_handler.conductance_file)
+                
+            if data_handler.co2_temp_humidity_file:
+                print("Ajout des graphiques pour CO2/temp/humidity...")
+                data_handler.add_charts_to_excel(data_handler.co2_temp_humidity_file)
+                
+            if data_handler.temp_res_file:
+                print("Ajout des graphiques pour temp/resistance...")
+                data_handler.add_charts_to_excel(data_handler.temp_res_file)
                 
             # Proposer à l'utilisateur de renommer le dossier de données si des fichiers ont été initialisés
             if files_initialized and hasattr(data_handler, 'test_folder_path') and data_handler.test_folder_path is not None:

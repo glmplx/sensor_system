@@ -544,18 +544,205 @@ class ExcelHandler:
         
     def add_charts_to_excel(self, file_path):
         """
-        Fonction désactivée pour éviter les problèmes de corruption des fichiers Excel
-        Les graphiques peuvent être créés directement dans Excel après l'exportation
+        Ajoute des graphiques aux feuilles Excel en fonction du type de données
         
         Args:
             file_path: Chemin du fichier Excel
+            
+        Returns:
+            bool: True si les graphiques ont été ajoutés avec succès, False sinon
         """
         if not os.path.exists(file_path):
             return False
             
-        # Création de graphiques dans les fichiers Excel désactivée
-        print(f"Création de graphiques dans le fichier Excel désactivée pour {file_path}")
-        return True
+        try:
+            wb = load_workbook(file_path)
+            
+            # Déterminer le type de données basé sur le nom du fichier
+            if "conductance" in os.path.basename(file_path).lower():
+                self._add_conductance_charts(wb)
+            elif "co2_temp_humidity" in os.path.basename(file_path).lower():
+                self._add_co2_temp_humidity_charts(wb)
+            elif "temperature_resistance" in os.path.basename(file_path).lower():
+                self._add_temp_res_charts(wb)
+                
+            wb.save(file_path)
+            return True
+        except Exception as e:
+            print(f"Erreur lors de l'ajout des graphiques Excel: {e}")
+            return False
+
+    def _add_conductance_charts(self, workbook):
+        """
+        Ajoute les graphiques pour les données de conductance
+        
+        Args:
+            workbook: Classeur Excel ouvert
+        """
+        for sheet_name in workbook.sheetnames:
+            if sheet_name.startswith("Cond_") or sheet_name == "Essais cumulés":
+                ws = workbook[sheet_name]
+                
+                # Créer un graphique
+                chart = LineChart()
+                chart.title = f"Conductance - {sheet_name}"
+                chart.style = 1
+                chart.y_axis.title = 'Conductance (µS)'
+                chart.x_axis.title = 'Temps (s)'
+
+                # Pour l'axe X :
+                chart.x_axis.majorTickMark = "out"  # Affiche les marques de graduation
+                chart.x_axis.minorTickMark = "none"  # Pas de graduations secondaires
+                chart.x_axis.tickLblPos = "nextTo"  # Position des étiquettes
+
+                # Pour l'axe Y :
+                chart.y_axis.majorTickMark = "out"
+                chart.y_axis.minorTickMark = "none"
+                chart.y_axis.tickLblPos = "nextTo"
+
+                # Optionnel: forcer une échelle spécifique si nécessaire
+                # chart.y_axis.scaling.min = 0
+                # chart.y_axis.scaling.max = 100
+                
+                # Références aux données
+                data = Reference(ws, min_col=3, min_row=1, max_col=3, max_row=ws.max_row)
+                categories = Reference(ws, min_col=2, min_row=2, max_row=ws.max_row)
+                
+                # Ajouter les données au graphique
+                chart.add_data(data, titles_from_data=True)
+                chart.set_categories(categories)
+                
+                # Ajouter le graphique à la feuille en position H5
+                ws.add_chart(chart, "H5")
+                
+                # Configurer la série pour n'avoir que des lignes sans marqueurs et aucun symbole
+                for series in chart.series:
+                    series.marker = None  # Supprime les marqueurs
+                    series.smooth = False  # Ligne droite entre les points
+                    # Optionnel: définir l'épaisseur de la ligne
+                    series.graphicalProperties.line.width = 20000  # Environ 1 pt
+
+    def _add_co2_temp_humidity_charts(self, workbook):
+        """
+        Ajoute les graphiques pour les données CO2/température/humidité
+        
+        Args:
+            workbook: Classeur Excel ouvert
+        """
+        for sheet_name in workbook.sheetnames:
+            if sheet_name.startswith("CO2_") or sheet_name == "Essais cumulés":
+                ws = workbook[sheet_name]
+                
+                # Graphique principal pour CO2
+                chart1 = LineChart()
+                chart1.title = f"CO2 - {sheet_name}"
+                chart1.style = 1
+                chart1.y_axis.title = 'CO2 (ppm)'
+                chart1.x_axis.title = 'Temps (s)'
+                # Pour l'axe X :
+                chart1.x_axis.majorTickMark = "out"  # Affiche les marques de graduation
+                chart1.x_axis.minorTickMark = "none"  # Pas de graduations secondaires
+                chart1.x_axis.tickLblPos = "nextTo"  # Position des étiquettes
+
+                # Pour l'axe Y :
+                chart1.y_axis.majorTickMark = "out"
+                chart1.y_axis.minorTickMark = "none"
+                chart1.y_axis.tickLblPos = "nextTo"
+
+                # Optionnel: forcer une échelle spécifique si nécessaire
+                # chart1.y_axis.scaling.min = 0
+                # chart1.y_axis.scaling.max = 100
+                
+                # Données CO2
+                co2_data = Reference(ws, min_col=3, min_row=1, max_col=3, max_row=ws.max_row)
+                categories = Reference(ws, min_col=2, min_row=2, max_row=ws.max_row)
+                
+                chart1.add_data(co2_data, titles_from_data=True)
+                chart1.set_categories(categories)
+                
+                # Graphique secondaire pour température et humidité
+                chart2 = LineChart()
+                chart2.style = 1
+                
+                # Données température et humidité
+                temp_data = Reference(ws, min_col=4, min_row=1, max_col=4, max_row=ws.max_row)
+                hum_data = Reference(ws, min_col=5, min_row=1, max_col=5, max_row=ws.max_row)
+                
+                chart2.add_data(temp_data, titles_from_data=True)
+                chart2.add_data(hum_data, titles_from_data=True)
+                
+                # Combiner les graphiques
+                chart1.y_axis.majorGridlines = None
+                chart2.y_axis.axId = 20
+                chart1 += chart2
+                
+                # Configurer l'axe secondaire
+                chart1.y_axis.crosses = "max"
+                chart2.y_axis.title = "Température (°C) et Humidité (%)"
+                
+                # Ajouter le graphique combiné en position H5
+                ws.add_chart(chart1, "H5")
+                
+                # Configurer les séries pour n'avoir que des lignes sans marqueurs et lignes droites
+                for series in chart1.series:
+                    series.marker = None  # Supprime les marqueurs
+                    series.smooth = False  # Ligne droite entre les points
+                    # Optionnel: définir l'épaisseur de la ligne
+                    series.graphicalProperties.line.width = 20000  # Environ 1 pt
+
+    def _add_temp_res_charts(self, workbook):
+        """
+        Ajoute les graphiques pour les données température/résistance
+        
+        Args:
+            workbook: Classeur Excel ouvert
+        """
+        for sheet_name in workbook.sheetnames:
+            if sheet_name.startswith("Temp_") or sheet_name == "Essais cumulés":
+                ws = workbook[sheet_name]
+                
+                # Créer un graphique
+                chart = LineChart()
+                chart.title = f"Température - {sheet_name}"
+                chart.style = 1
+                # Pour l'axe X :
+                chart.x_axis.majorTickMark = "out"  # Affiche les marques de graduation
+                chart.x_axis.minorTickMark = "in"  # Pas de graduations secondaires
+                chart.x_axis.tickLblPos = "nextTo"  # Position des étiquettes
+
+                # Pour l'axe Y :
+                chart.y_axis.majorTickMark = "out"
+                chart.y_axis.minorTickMark = "in"
+                chart.y_axis.tickLblPos = "nextTo"
+                chart.y_axis.title = 'Température (°C)'
+                chart.x_axis.title = 'Temps (s)'
+
+                
+                # Références aux données
+                temp_data = Reference(ws, min_col=3, min_row=1, max_col=3, max_row=ws.max_row)
+                tcons_data = Reference(ws, min_col=4, min_row=1, max_col=4, max_row=ws.max_row)
+                categories = Reference(ws, min_col=2, min_row=2, max_row=ws.max_row)
+                
+                # Ajouter les données au graphique
+                chart.add_data(temp_data, titles_from_data=True)
+                chart.add_data(tcons_data, titles_from_data=True)
+                chart.set_categories(categories)
+                
+                # Configurer les séries - Couleurs différentes mais sans marqueurs
+                s1 = chart.series[0]
+                s1.marker = None
+                s1.smooth = False  # Ligne droite entre les points
+                s1.graphicalProperties.line.solidFill = "FF0000"  # Rouge pour température mesurée
+                s1.graphicalProperties.line.width = 20000  # Environ 1 pt
+                
+                s2 = chart.series[1]
+                s2.marker = None
+                s2.smooth = False  # Ligne droite entre les points
+                s2.graphicalProperties.line.solidFill = "0000FF"  # Bleu pour Tcons
+                s2.graphicalProperties.line.width = 20000  # Environ 1 pt
+                
+                # Ajouter le graphique à la feuille en position H5
+                ws.add_chart(chart, "H5")
 
     def _should_create_cumulative_sheet(self, file_path):
         """Détermine si une feuille 'Essais cumulés' doit être créée"""
