@@ -77,26 +77,45 @@ class ExcelHandler:
             
         excel_folder_path = os.path.join(application_path, EXCEL_BASE_DIR)
         
+        # Try application folder first (where the executable is located)
         try:
             if not os.path.exists(excel_folder_path):
-                os.makedirs(excel_folder_path)
+                os.makedirs(excel_folder_path, exist_ok=True)
             
             mode_prefix = "Manual" if self.mode == "manual" else "Auto"
             test_folder_name = f"Test-{mode_prefix}-{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}"
             self.test_folder_path = os.path.join(excel_folder_path, test_folder_name)
             
-            os.makedirs(self.test_folder_path)
-        except PermissionError:
-            # Fallback to user documents folder if program files is not writeable
-            user_docs = os.path.join(os.path.expanduser('~'), 'Documents', 'IRSN', EXCEL_BASE_DIR)
-            if not os.path.exists(user_docs):
-                os.makedirs(user_docs)
+            os.makedirs(self.test_folder_path, exist_ok=True)
+            print(f"Using application folder for data storage: {self.test_folder_path}")
+        except Exception as e:
+            # If application folder fails, try user documents folder
+            print(f"Failed to create directory in application folder: {e}, trying Documents folder...")
+            try:
+                # Try Documents folder as fallback
+                user_docs = os.path.join(os.path.expanduser('~'), 'Documents', 'ASNR', EXCEL_BASE_DIR)
+                if not os.path.exists(user_docs):
+                    os.makedirs(user_docs, exist_ok=True)
+                    
+                mode_prefix = "Manual" if self.mode == "manual" else "Auto"
+                test_folder_name = f"Test-{mode_prefix}-{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}"
+                self.test_folder_path = os.path.join(user_docs, test_folder_name)
                 
-            mode_prefix = "Manual" if self.mode == "manual" else "Auto"
-            test_folder_name = f"Test-{mode_prefix}-{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}"
-            self.test_folder_path = os.path.join(user_docs, test_folder_name)
-            
-            os.makedirs(self.test_folder_path)
+                os.makedirs(self.test_folder_path, exist_ok=True)
+                print(f"Using Documents folder for data storage: {self.test_folder_path}")
+            except Exception as e:
+                # Last resort: use temp directory
+                import tempfile
+                temp_dir = tempfile.gettempdir()
+                print(f"Failed to create directory in Documents folder: {e}, using temp directory: {temp_dir}")
+                
+                mode_prefix = "Manual" if self.mode == "manual" else "Auto"
+                test_folder_name = f"Test-{mode_prefix}-{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}"
+                self.test_folder_path = os.path.join(temp_dir, 'ASNR', EXCEL_BASE_DIR, test_folder_name)
+                
+                os.makedirs(os.path.dirname(self.test_folder_path), exist_ok=True)
+                os.makedirs(self.test_folder_path, exist_ok=True)
+                print(f"Using temp directory for data storage: {self.test_folder_path}")
         return self.test_folder_path
     
     def initialize_file(self, file_type):

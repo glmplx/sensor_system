@@ -4,10 +4,10 @@
 !include "MUI2.nsh"
 
 ; Définition des informations générales
-Name "Systeme de capteurs IRSN"
+Name "Systeme de capteurs ASNR"
 OutFile "SensorSystemInstaller.exe"
-InstallDir "$PROGRAMFILES\IRSN\SensorSystem"
-InstallDirRegKey HKCU "Software\IRSN\SensorSystem" ""
+InstallDir "$PROGRAMFILES\ASNR\SensorSystem"
+InstallDirRegKey HKCU "Software\ASNR\SensorSystem" ""
 RequestExecutionLevel admin
 
 ; Pages de l'interface utilisateur
@@ -26,7 +26,7 @@ RequestExecutionLevel admin
 ; Fonction d'initialisation
 Function .onInit
   ; Par défaut, proposer l'installation dans Program Files
-  StrCpy $INSTDIR "$PROGRAMFILES\IRSN\SensorSystem"
+  StrCpy $INSTDIR "$PROGRAMFILES\ASNR\SensorSystem"
 FunctionEnd
 
 ; Section principale d'installation
@@ -40,25 +40,25 @@ Section "Installation principale" SecMain
   CreateDirectory "$INSTDIR\donnees_excel"
   
   ; Créer un raccourci dans le Menu Démarrer
-  CreateDirectory "$SMPROGRAMS\IRSN"
-  CreateShortcut "$SMPROGRAMS\IRSN\Systeme de capteurs.lnk" "$INSTDIR\SensorSystem.exe"
-  CreateShortcut "$DESKTOP\Systeme de capteurs IRSN.lnk" "$INSTDIR\SensorSystem.exe"
+  CreateDirectory "$SMPROGRAMS\ASNR"
+  CreateShortcut "$SMPROGRAMS\ASNR\Systeme de capteurs.lnk" "$INSTDIR\SensorSystem.exe"
+  CreateShortcut "$DESKTOP\Systeme de capteurs ASNR.lnk" "$INSTDIR\SensorSystem.exe"
   
   ; Écrire les informations d'installation dans le registre
-  WriteRegStr HKCU "Software\IRSN\SensorSystem" "" $INSTDIR
+  WriteRegStr HKCU "Software\ASNR\SensorSystem" "" $INSTDIR
   
   ; Créer la désinstallation
   WriteUninstaller "$INSTDIR\Uninstall.exe"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\IRSN_SensorSystem" "DisplayName" "Systeme de capteurs IRSN"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\IRSN_SensorSystem" "UninstallString" "$\"$INSTDIR\Uninstall.exe$\""
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ASNR_SensorSystem" "DisplayName" "Systeme de capteurs ASNR"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ASNR_SensorSystem" "UninstallString" "$\"$INSTDIR\Uninstall.exe$\""
 SectionEnd
 
 ; Section de désinstallation
 Section "Uninstall"
   ; Supprimer les fichiers et dossiers
-  Delete "$SMPROGRAMS\IRSN\Systeme de capteurs.lnk"
-  Delete "$DESKTOP\Systeme de capteurs IRSN.lnk"
-  RMDir /r "$SMPROGRAMS\IRSN"
+  Delete "$SMPROGRAMS\ASNR\Systeme de capteurs.lnk"
+  Delete "$DESKTOP\Systeme de capteurs ASNR.lnk"
+  RMDir /r "$SMPROGRAMS\ASNR"
   
   ; Demander à l'utilisateur s'il souhaite conserver les données
   MessageBox MB_YESNO "Voulez-vous conserver les données Excel? Cliquez sur 'Oui' pour les conserver, 'Non' pour tout supprimer." IDYES KeepData
@@ -70,6 +70,6 @@ Section "Uninstall"
   RMDir /r "$INSTDIR"
   
   ; Supprimer les entrées du registre
-  DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\IRSN_SensorSystem"
-  DeleteRegKey HKCU "Software\IRSN\SensorSystem"
+  DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ASNR_SensorSystem"
+  DeleteRegKey HKCU "Software\ASNR\SensorSystem"
 SectionEnd

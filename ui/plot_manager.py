@@ -373,7 +373,7 @@ class PlotManager:
                     if hasattr(self.buttons[button_name], 'active') and not self.buttons[button_name].active:
                         return
                     
-                    # Sinon, appeler le callback normal
+                    # Sinon, appeler le callback normal avec l'event
                     callback(event)
                 
                 self.buttons[button_name].on_clicked(wrapped_disabled_callback)

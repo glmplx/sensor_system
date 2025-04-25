@@ -24,7 +24,7 @@ class MenuUI:
         self.other_com_var = tk.StringVar()
         self.arduino_baud_rate_var = tk.IntVar(value=115200)
         self.other_baud_rate_var = tk.IntVar(value=115200)
-        self.mode_manual_var = tk.IntVar()
+        self.mode_manual_var = tk.IntVar(value=1)  # Présélection du mode manuel
         self.mode_auto_var = tk.IntVar()
         
         # Measurement selection variables (for manual mode)
@@ -34,6 +34,81 @@ class MenuUI:
         
         # Set up UI elements
         self.setup_ui()
+        
+        # Initialiser le mode manuel dès le démarrage
+        self.set_manual_mode()
+    
+    def refresh_ports(self):
+        """Actualiser la liste des ports COM disponibles"""
+        # Sauvegarder les valeurs actuelles
+        old_arduino_com = self.arduino_com_var.get()
+        old_other_com = self.other_com_var.get()
+        
+        # Récupérer les ports disponibles
+        ports = serial.tools.list_ports.comports()
+        ports_info = [(port.device, port.description) for port in ports]
+        ports_display = [f"{port[0]} - {port[1]}" for port in ports_info]
+        
+        # Pré-sélection des ports selon leur description
+        arduino_port_index = None
+        regen_port_index = None
+        
+        for i, (_, description) in enumerate(ports_info):
+            # Cherche Arduino ou UNO dans les descriptions pour le port Arduino
+            if "Arduino" in description or "UNO" in description:
+                arduino_port_index = i
+            # Cherche "USB Serial Port" dans les descriptions pour le port de régénération
+            elif "USB Serial Port" in description:
+                regen_port_index = i
+        
+        # Mettre à jour les menus déroulants
+        # Pour Arduino
+        self.arduino_com_dropdown['menu'].delete(0, 'end')
+        
+        if ports_display:
+            for port in ports_display:
+                self.arduino_com_dropdown['menu'].add_command(label=port, command=lambda p=port: self.arduino_com_var.set(p))
+            
+            # Essayer de conserver la sélection précédente
+            if old_arduino_com in ports_display:
+                self.arduino_com_var.set(old_arduino_com)
+            elif arduino_port_index is not None:
+                self.arduino_com_var.set(ports_display[arduino_port_index])
+                # Préselectionner CO2/température/humidité si Arduino détecté
+                self.measure_co2_var.set(1)
+            else:
+                self.arduino_com_var.set("")
+                # Désactiver CO2/température/humidité si Arduino non détecté
+                self.measure_co2_var.set(0)
+        else:
+            self.arduino_com_dropdown['menu'].add_command(label="Aucun port détecté", command=lambda: self.arduino_com_var.set("Aucun port détecté"))
+            self.arduino_com_var.set("Aucun port détecté")
+            self.measure_co2_var.set(0)
+        
+        # Pour la carte de régénération
+        self.other_com_dropdown['menu'].delete(0, 'end')
+        
+        if ports_display:
+            for port in ports_display:
+                self.other_com_dropdown['menu'].add_command(label=port, command=lambda p=port: self.other_com_var.set(p))
+            
+            # Essayer de conserver la sélection précédente
+            if old_other_com in ports_display:
+                self.other_com_var.set(old_other_com)
+            elif regen_port_index is not None:
+                self.other_com_var.set(ports_display[regen_port_index])
+                # Préselectionner régénération/température si carte régénération détectée
+                self.measure_regen_var.set(1)
+            else:
+                self.other_com_var.set("")
+                # Désactiver régénération/température si carte non détectée
+                self.measure_regen_var.set(0)
+        else:
+            self.other_com_dropdown['menu'].add_command(label="Aucun port détecté", command=lambda: self.other_com_var.set("Aucun port détecté"))
+            self.other_com_var.set("Aucun port détecté")
+            self.measure_regen_var.set(0)
+        
+        tk.messagebox.showinfo("Actualisation", "Liste des ports COM actualisée.")
     
     def setup_ui(self):
         """Configurer les éléments de l'interface utilisateur"""
@@ -56,8 +131,15 @@ class MenuUI:
         
         # Arduino port selection
         tk.Label(self.window, text="Port COM de l'Arduino:").grid(row=0, column=0, padx=10, pady=10, sticky='w')
-        arduino_com_dropdown = tk.OptionMenu(self.window, self.arduino_com_var, *ports_display)
-        arduino_com_dropdown.grid(row=0, column=1, padx=10, pady=10)
+        
+        # Handle case when no ports are detected
+        if ports_display:
+            self.arduino_com_dropdown = tk.OptionMenu(self.window, self.arduino_com_var, *ports_display)
+        else:
+            # Create dummy option menu with empty list to avoid error
+            self.arduino_com_var.set("Aucun port détecté")
+            self.arduino_com_dropdown = tk.OptionMenu(self.window, self.arduino_com_var, "Aucun port détecté")
+        self.arduino_com_dropdown.grid(row=0, column=1, padx=10, pady=10, sticky='w')
         
         # Pré-sélectionner le port Arduino s'il a été détecté
         arduino_detected = arduino_port_index is not None
@@ -72,12 +154,18 @@ class MenuUI:
         # Arduino baud rate
         tk.Label(self.window, text="Baudrate de l'Arduino:").grid(row=1, column=0, padx=10, pady=10, sticky='w')
         arduino_baud_rate_entry = tk.Entry(self.window, textvariable=self.arduino_baud_rate_var)
-        arduino_baud_rate_entry.grid(row=1, column=1, padx=10, pady=10)
+        arduino_baud_rate_entry.grid(row=1, column=1, padx=10, pady=10, sticky='w')
         
         # Regeneration card port selection
         tk.Label(self.window, text="Port COM de la carte pour la régénération:").grid(row=2, column=0, padx=10, pady=10, sticky='w')
-        other_com_dropdown = tk.OptionMenu(self.window, self.other_com_var, *ports_display)
-        other_com_dropdown.grid(row=2, column=1, padx=10, pady=10)
+        # Handle case when no ports are detected
+        if ports_display:
+            self.other_com_dropdown = tk.OptionMenu(self.window, self.other_com_var, *ports_display)
+        else:
+            # Create dummy option menu with empty list to avoid error
+            self.other_com_var.set("Aucun port détecté")
+            self.other_com_dropdown = tk.OptionMenu(self.window, self.other_com_var, "Aucun port détecté")
+        self.other_com_dropdown.grid(row=2, column=1, padx=10, pady=10, sticky='w')
         
         # Pré-sélectionner le port Serial s'il a été détecté
         regen_detected = regen_port_index is not None
@@ -92,7 +180,7 @@ class MenuUI:
         # Regeneration card baud rate
         tk.Label(self.window, text="Baudrate de la carte pour la régénération:").grid(row=3, column=0, padx=10, pady=10, sticky='w')
         other_baud_rate_entry = tk.Entry(self.window, textvariable=self.other_baud_rate_var)
-        other_baud_rate_entry.grid(row=3, column=1, padx=10, pady=10)
+        other_baud_rate_entry.grid(row=3, column=1, padx=10, pady=10, sticky='w')
         
         # Mode selection checkboxes
         manual_check = tk.Checkbutton(self.window, text="Mode Manuel", variable=self.mode_manual_var, command=self.set_manual_mode)
@@ -111,9 +199,13 @@ class MenuUI:
         tk.Checkbutton(self.measurement_frame, text="CO2 / Température / Humidité", variable=self.measure_co2_var).grid(row=1, column=0, sticky='w', padx=10, pady=5)
         tk.Checkbutton(self.measurement_frame, text="Régénération / Température", variable=self.measure_regen_var).grid(row=2, column=0, sticky='w', padx=10, pady=5)
         
-        # Button frame to hold both launch and quit buttons
+        # Button frame to hold refresh, launch and quit buttons
         button_frame = tk.Frame(self.window)
         button_frame.grid(row=6, column=0, columnspan=2, pady=20)
+        
+        # Refresh ports button
+        refresh_button = tk.Button(button_frame, text="Actualiser les ports", command=self.refresh_ports)
+        refresh_button.pack(side=tk.LEFT, padx=10)
         
         # Launch button
         launch_button = tk.Button(button_frame, text="Lancer le programme", command=self.launch_program)
