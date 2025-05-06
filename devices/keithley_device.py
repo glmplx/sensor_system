@@ -4,10 +4,24 @@ Interface pour l'appareil Keithley 6517
 
 import time
 import pyvisa
+import sys
 from core.constants import KEITHLEY_COMMANDS, KEITHLEY_GPIB_ADDRESS
 
 class KeithleyDevice:
     """Interface pour l'électromètre Keithley 6517"""
+    
+    # Définir le gestionnaire d'exceptions personnalisé pour intercepter les erreurs non gérées
+    def _custom_excepthook(self, etype, evalue, etraceback):
+        # Si c'est une erreur VisaIOError avec le code VI_ERROR_CLOSING_FAILED
+        if etype == pyvisa.errors.VisaIOError and (
+            str(getattr(evalue, 'error_code', '')) == '-1073807338' or 
+            'VI_ERROR_CLOSING_FAILED' in str(evalue)
+        ):
+            if not hasattr(self, '_closing_error_handled') or not self._closing_error_handled:
+                print("Info: Appareil Keithley déconnecté de manière inattendue.")
+        else:
+            # Sinon, passer à l'exception hook d'origine
+            self._original_excepthook(etype, evalue, etraceback)
     
     def __init__(self, gpib_address=KEITHLEY_GPIB_ADDRESS):
         """
@@ -18,6 +32,12 @@ class KeithleyDevice:
         """
         self.gpib_address = gpib_address
         self.device = None
+        # Pour empêcher les erreurs lors du garbage collection
+        self._closing_error_handled = False
+        
+        # Installer le hook d'exception personnalisé
+        self._original_excepthook = sys.excepthook
+        sys.excepthook = lambda etype, evalue, etb: self._custom_excepthook(etype, evalue, etb)
     
     def connect(self):
         """Connexion à l'appareil Keithley"""
@@ -82,9 +102,16 @@ class KeithleyDevice:
         except pyvisa.errors.VisaIOError as e:
             # Erreur spécifique de communication VISA (timeout, etc.)
             print(f"Error reading resistance: {e}")
-            # En cas d'erreur de communication, retourner la dernière valeur valide
-            # ou une valeur par défaut si aucune lecture précédente n'existe
-            return 1000000.0  # 1 MOhm par défaut en cas d'erreur
+            
+            # Marquer l'appareil comme non disponible pour éviter d'autres erreurs
+            # et déclencher la pause des mesures dans l'interface
+            self.device = None
+            
+            # Signal à l'interface que l'appareil s'est déconnecté
+            print("Keithley déconnecté - marquer comme indisponible")
+            
+            # Retourner None pour indiquer une déconnexion
+            return None
         except (ValueError, IndexError) as e:
             # Erreur de format ou de parsing
             print(f"Error parsing resistance data: {e}")
@@ -168,8 +195,13 @@ class KeithleyDevice:
                 self.device = None  # Libérer explicitement la référence
                 return True
             except pyvisa.errors.VisaIOError as e:
-                # Erreur spécifique de communication VISA (timeout, etc.)
-                print(f"Avertissement: Délai dépassé lors de la fermeture de la connexion Keithley: {e}")
+                # Vérifier si c'est l'erreur de fermeture spécifique (VI_ERROR_CLOSING_FAILED = -1073807338)
+                if str(e.error_code) == '-1073807338' or 'VI_ERROR_CLOSING_FAILED' in str(e):
+                    # Marquer que cette erreur a été gérée pour éviter les messages d'erreur lors du garbage collection
+                    self._closing_error_handled = True
+                    print("Info: Appareil Keithley déconnecté ou retiré.")
+                else:
+                    print(f"Avertissement: Délai dépassé lors de la fermeture de la connexion Keithley: {e}")
                 # Libérer la référence même en cas d'erreur
                 self.device = None
                 return True
@@ -179,3 +211,20 @@ class KeithleyDevice:
                 self.device = None
                 return False
         return True
+    
+    def __del__(self):
+        """Destructeur - assure que la connexion est fermée lors de la suppression de l'objet"""
+        try:
+            self.close()
+            # Restaurer le hook d'exception original
+            if hasattr(self, '_original_excepthook') and sys.excepthook is not None:
+                sys.excepthook = self._original_excepthook
+        except pyvisa.errors.VisaIOError as e:
+            # Intercepter spécifiquement l'erreur VI_ERROR_CLOSING_FAILED
+            if str(getattr(e, 'error_code', '')) == '-1073807338' or 'VI_ERROR_CLOSING_FAILED' in str(e):
+                self._closing_error_handled = True
+                print("Info: Appareil Keithley déconnecté lors de la fermeture du programme.")
+            # Ne pas propager l'exception pour éviter le traceback
+        except Exception:
+            # Ne pas propager d'autres exceptions non plus
+            pass

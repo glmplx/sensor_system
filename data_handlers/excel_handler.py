@@ -186,21 +186,35 @@ class ExcelHandler:
                 wb.remove(wb["_temp"])
             
             # Vérifier si la feuille existe déjà
-            if sheet_name in wb.sheetnames:
-                print(f"La feuille {sheet_name} existe déjà - pas de duplication")
-                return True
-                
-            # Créer la nouvelle feuille seulement si elle n'existe pas
+            sheet_exists = sheet_name in wb.sheetnames
+            if sheet_exists:
+                # Générer un nom unique en ajoutant un suffixe numérique
+                base_name = sheet_name
+                counter = 1
+                while sheet_name in wb.sheetnames:
+                    sheet_name = f"{base_name}_{counter}"
+                    counter += 1
+            
+            # Créer la nouvelle feuille
             ws = wb.create_sheet(sheet_name)
+            
+            # Ajouter les données
             for col_num, (key, values) in enumerate(data.items(), 1):
-                ws.cell(row=1, column=col_num, value=key)
-                for row_num, value in enumerate(values, 2):
-                    ws.cell(row=row_num, column=col_num, value=value)
+                # Vérifier que les valeurs existent et sont non vides
+                if values:
+                    ws.cell(row=1, column=col_num, value=key)
+                    for row_num, value in enumerate(values, 2):
+                        ws.cell(row=row_num, column=col_num, value=value)
             
-            # Mettre à jour "Essais cumulés" si nécessaire
+            
+            # Mettre à jour "Essais cumulés" si nécessaire et qu'on a plus d'une feuille de données
             if self._should_create_cumulative_sheet(file_path):
+                # Sauvegarder avant de mettre à jour la feuille cumulée
+                wb.save(file_path)
                 self._update_cumulative_sheet(file_path)
+                return True
             
+            # Sauvegarder les modifications
             wb.save(file_path)
             return True
         except Exception as e:
@@ -231,12 +245,12 @@ class ExcelHandler:
                 file_type = "temp_res"
             else:
                 return
-                
+            
             # Vérifier que nous avons des données accumulées valides
             has_cumulative_data = all(key in cumulative_data for key in required_fields)
-            has_cumulative_data &= any(len(cumulative_data[key]) > 0 for key in required_fields)
+            has_data = any(len(cumulative_data.get(key, [])) > 0 for key in required_fields)
             
-            if not has_cumulative_data:
+            if not has_cumulative_data or not has_data:
                 return
                 
             # Ne créer la feuille "Essais cumulés" que s'il y a plus d'une série de mesures
@@ -245,6 +259,9 @@ class ExcelHandler:
                 
             # Charger le fichier Excel
             wb = load_workbook(file_path)
+            
+            # Déterminer les feuilles de données (excluant celle cumulée et la temporaire)
+            data_sheets = [s for s in wb.sheetnames if s != "Essais cumulés" and s != "_temp"]
             
             # Supprimer l'ancienne feuille "Essais cumulés" si elle existe
             if "Essais cumulés" in wb.sheetnames:
@@ -257,12 +274,23 @@ class ExcelHandler:
             for col_num, header in enumerate(required_fields, 1):
                 ws.cell(row=1, column=col_num, value=header)
             
-            # Écrire les données
-            max_rows = max(len(cumulative_data[key]) for key in required_fields)
+            # Vérifier si les données accumulées sont cohérentes
+            data_lengths = [len(cumulative_data.get(key, [])) for key in required_fields]
             
+            if len(set(data_lengths)) > 1:
+                # Les données ne sont pas de même longueur - trouver la longueur maximale valide
+                valid_lengths = [l for l in data_lengths if l > 0]
+                if not valid_lengths:
+                    return
+                max_rows = max(valid_lengths)
+            else:
+                # Toutes les données ont la même longueur
+                max_rows = data_lengths[0] if data_lengths else 0
+            
+            # Écrire les données
             for row_num in range(max_rows):
                 for col_num, key in enumerate(required_fields, 1):
-                    if row_num < len(cumulative_data[key]):
+                    if row_num < len(cumulative_data.get(key, [])):
                         ws.cell(row=row_num+2, column=col_num, value=cumulative_data[key][row_num])
             
             # Sauvegarder les modifications
@@ -324,12 +352,24 @@ class ExcelHandler:
         if not self.conductance_file:
             self.initialize_file("conductance")
         
-        if not timeList:
+        if not timeList or len(timeList) == 0:
             return False
+        
+        # Créer un nom unique pour la feuille en utilisant l'horodatage actuel
+        sheet_name = f"Cond_{datetime.now().strftime('%H%M%S')}"
+        
+        # Vérifier si cette feuille existe déjà
+        try:
+            wb = load_workbook(self.conductance_file)
+            if sheet_name in wb.sheetnames:
+                # Génère un nom alternatif en ajoutant un suffixe
+                sheet_name = f"{sheet_name}_{self.conductance_series_count}"
+        except Exception as e:
+            print(f"Warning: Couldn't check for duplicate sheet names: {e}")
         
         # Calculate last time point for cumulative data continuation
         lastTime = 0
-        if self.accumulated_conductance_data['Temps (s)']:
+        if self.accumulated_conductance_data['Temps (s)'] and len(self.accumulated_conductance_data['Temps (s)']) > 0:
             lastTime = self.accumulated_conductance_data['Temps (s)'][-1]
         
         # Add new data to accumulated data with adjusted timestamps
@@ -341,20 +381,16 @@ class ExcelHandler:
         # Incrémenter le compteur à chaque sauvegarde (start button)
         self.conductance_series_count += 1
         
-        # Create current test data sheet only if there's data
-        if len(timeList) > 0:
-            sheet_name = f"Cond_{datetime.now().strftime('%H%M%S')}"
-            data = {
-                'Minutes': [t / 60.0 for t in timeList],
-                'Temps (s)': timeList,
-                'Conductance (µS)': conductanceList,
-                'Resistance (Ohms)': resistanceList
-            }
-            
-            # Save current test data
-            return self.add_sheet_to_excel(self.conductance_file, sheet_name, data)
+        # Create current test data sheet
+        data = {
+            'Minutes': [t / 60.0 for t in timeList],
+            'Temps (s)': timeList,
+            'Conductance (µS)': conductanceList,
+            'Resistance (Ohms)': resistanceList
+        }
         
-        return False
+        # Save current test data
+        return self.add_sheet_to_excel(self.conductance_file, sheet_name, data)
     
     def save_co2_temp_humidity_data(self, co2_timestamps, co2_values, temp_timestamps, temp_values, humidity_timestamps, humidity_values, delta_c=None, carbon_mass=None):
         """Sauvegarde les données CO2/temp/humidity"""

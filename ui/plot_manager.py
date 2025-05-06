@@ -3,11 +3,12 @@ Plot manager for the sensor system UI
 """
 
 import sys
+import time
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button, TextBox, RadioButtons
 
 class PlotManager:
-    """Manages matplotlib plots and UI elements"""
+    """Gère les graphiques matplotlib et les éléments UI"""
     
     def __init__(self, mode="manual"):
         """
@@ -32,13 +33,23 @@ class PlotManager:
         self.textboxes = {}
         self.radiobuttons = {}
         
-        # Variable to track time unit display preference (default: seconds)
+        # Variable pour suivre les préférences d'affichage des unités de temps (par défaut : secondes)
         self.display_minutes = False
         
-        # Reference for CO2 restabilization time
+        # Référence pour le temps de restabilisation du CO2
         self.reference_restabilization_time = None
         
-        # Setup figure and plots
+        # Statut des appareils disponibles
+        self.available_devices = {
+            'arduino': False,
+            'regen': False,
+            'keithley': False
+        }
+        
+        # Boutons d'ajout d'appareils
+        self.add_device_buttons = {}
+        
+        # Configuration de la figure et des graphiques
         self.setup_plots()
     
     def setup_plots(self):
@@ -47,24 +58,24 @@ class PlotManager:
         self.fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(14, 18))
         
         
-        # Set window size/position based on how we're running
+        # Définition de la taille/position de la fenêtre en fonction du mode d'exécution
         try:
             manager = plt.get_current_fig_manager()
             
-            # Check if running as executable
+            # Vérifier si exécuté sous forme d'exécutable
             if getattr(sys, 'frozen', False):
-                # For executable, use a more conservative size and try to center it
-                width, height = 1400, 800  # More conservative size
+                # Pour l'exécutable, utiliser une taille plus conservative et essayer de centrer la fenêtre
+                width, height = 1400, 800  # Taille plus conservative
                 
-                # Try different methods to adjust the window
+                # Essayer différentes méthodes pour ajuster la fenêtre
                 try:
-                    # Try to center the window - for Tkinter
+                    # Essayer de centrer la fenêtre - pour Tkinter
                     if hasattr(manager, 'canvas') and hasattr(manager.canvas, 'manager') and hasattr(manager.canvas.manager, 'window'):
                         root = manager.canvas.manager.window
-                        # First configure the window size
+                        # D'abord configurer la taille de la fenêtre
                         root.geometry(f"{width}x{height}")
                         
-                        # Then center it after a short delay
+                        # Ensuite la centrer après un court délai
                         def center_window():
                             screen_width = root.winfo_screenwidth()
                             screen_height = root.winfo_screenheight()
@@ -72,7 +83,7 @@ class PlotManager:
                             pos_y = (screen_height // 2) - (height // 2)
                             root.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
                         
-                        # Schedule the centering for after the window is created
+                        # Programmer le centrage pour après la création de la fenêtre
                         root.after(100, center_window)
                     
                     # For Qt backends
@@ -185,17 +196,36 @@ class PlotManager:
         ax_button_raz_res_temp = plt.axes([0.26, 0.06, button_width, button_height])
         self.buttons['raz_res_temp'] = Button(ax_button_raz_res_temp, 'RAZ Res/Temp')
         
-        # Regeneration buttons (above set Tcons, left of retract/close)
-        # Décalage du bouton de régénération vers la droite et réduction de largeur
-        ax_button_regeneration = plt.axes([0.53, 0.06, button_width * 0.9, button_height])
-        regeneration_button = Button(ax_button_regeneration, 'Start Regeneration', color='firebrick')
+        # Protocole buttons à droite de Start/Stop Res/Temp
+        protocol_button_width = button_width * 0.85  # Légèrement plus large pour mieux afficher le texte
+        protocol_y = 0.01  # Même hauteur que les boutons Start/Stop
+        spacing = 0.04  # Définir spacing ici avant utilisation
+        
+        # Position X juste après le bouton Start/Stop Res/Temp (0.26 + button_width)
+        protocol_x = 0.38
+        
+        # Bouton Protocole CO2
+        ax_button_regeneration = plt.axes([protocol_x, protocol_y, protocol_button_width, button_height])
+        regeneration_button = Button(ax_button_regeneration, 'Protocole CO2', color='firebrick')
         regeneration_button.ax.set_facecolor('firebrick')
         regeneration_button.color = 'firebrick'
         regeneration_button.label.set_color('white')
         self.buttons['regeneration'] = regeneration_button
         
-        # Bouton d'annulation de régénération (initialement caché)
-        ax_button_cancel_regen = plt.axes([0.63, 0.06, button_width * 0.7, button_height])
+        # Bouton pour le protocole de conductance avec résistance/température
+        protocol_x2 = protocol_x + protocol_button_width + 0.03  # Légèrement plus espacé
+        protocol_button_width2 = protocol_button_width * 1.4  # Encore plus large pour le texte plus long
+        ax_button_cond_regen = plt.axes([protocol_x2, protocol_y, protocol_button_width2, button_height])
+        cond_regen_button = Button(ax_button_cond_regen, 'Protocole Conductance', color='darkblue')
+        # Initialement désactivé (grisé) - sera activé dynamiquement quand les conditions seront remplies
+        cond_regen_button.ax.set_facecolor('lightgray')
+        cond_regen_button.color = 'lightgray'
+        cond_regen_button.label.set_color('black')
+        cond_regen_button.active = False  # Désactivé par défaut
+        self.buttons['conductance_regen'] = cond_regen_button
+        
+        # Bouton d'annulation de régénération (initialement caché) - au-dessus des boutons protocole
+        ax_button_cancel_regen = plt.axes([protocol_x + protocol_button_width/2, protocol_y + spacing, button_width * 0.7, button_height])
         cancel_regen_button = Button(ax_button_cancel_regen, 'Cancel', color='orange')
         cancel_regen_button.ax.set_facecolor('orange')
         cancel_regen_button.color = 'orange'
@@ -203,12 +233,21 @@ class PlotManager:
         cancel_regen_button.ax.set_visible(False)  # Initialement caché
         self.buttons['cancel_regeneration'] = cancel_regen_button
         
-        # Tcons input and button
-        ax_textbox_Tcons = plt.axes([0.60, 0.01, button_width/2, button_height])
-        self.textboxes['Tcons'] = TextBox(ax_textbox_Tcons, 'Tcons', initial='')
+        # Tcons input and button - déplacés vers la droite en vertical et encore plus bas
+        spacing = 0.04  # Espacement vertical
+        right_column_x = 0.92  # Position X de la colonne droite
+        # Définir right_column_y_start ici car il est utilisé dans setup_common_elements mais pas défini ici
+        right_column_y_start = 0.7  # Position Y de départ
+        tcons_y_start = 0.18  # Position encore plus basse pour mieux espacer de R0
+        compact_button_width = button_width/1.8
         
-        ax_button_Tcons = plt.axes([0.67, 0.01, button_width/2, button_height])
+        # Tcons textbox - collé au bouton Set Tcons
+        ax_button_Tcons = plt.axes([right_column_x, tcons_y_start - button_height - spacing/2, compact_button_width, button_height])
         self.buttons['set_Tcons'] = Button(ax_button_Tcons, 'Set Tcons')
+        
+        # Tcons textbox juste au-dessus du bouton
+        ax_textbox_Tcons = plt.axes([right_column_x, tcons_y_start - button_height/2, compact_button_width, button_height])
+        self.textboxes['Tcons'] = TextBox(ax_textbox_Tcons, '', initial='')
         self.buttons['set_Tcons'].active = True  # Définir active=True par défaut
     
     def setup_auto_buttons(self):
@@ -224,17 +263,36 @@ class PlotManager:
         ax_button_raz_auto = plt.axes([0.14, 0.01, button_width, button_height])
         self.buttons['raz_auto'] = Button(ax_button_raz_auto, 'RAZ Auto.')
         
-        # Regeneration buttons (ajouté pour le mode auto aussi)
-        # Décalage du bouton de régénération vers la droite et réduction de largeur
-        ax_button_regeneration = plt.axes([0.53, 0.06, button_width * 0.9, button_height])
-        regeneration_button = Button(ax_button_regeneration, 'Start Regeneration', color='firebrick')
+        # Protocole buttons à droite de Start/Stop Res/Temp
+        protocol_button_width = button_width * 0.85  # Légèrement plus large pour mieux afficher le texte
+        protocol_y = 0.01  # Même hauteur que les boutons Start/Stop
+        spacing = 0.04  # Définir spacing ici avant utilisation
+        
+        # Position X juste après le bouton Start/Stop Res/Temp (0.26 + button_width)
+        protocol_x = 0.38
+        
+        # Bouton Protocole CO2
+        ax_button_regeneration = plt.axes([protocol_x, protocol_y, protocol_button_width, button_height])
+        regeneration_button = Button(ax_button_regeneration, 'Protocole CO2', color='firebrick')
         regeneration_button.ax.set_facecolor('firebrick')
         regeneration_button.color = 'firebrick'
         regeneration_button.label.set_color('white')
         self.buttons['regeneration'] = regeneration_button
         
-        # Bouton d'annulation de régénération (initialement caché)
-        ax_button_cancel_regen = plt.axes([0.63, 0.06, button_width * 0.7, button_height])
+        # Bouton pour le protocole de conductance avec résistance/température
+        protocol_x2 = protocol_x + protocol_button_width + 0.03  # Légèrement plus espacé
+        protocol_button_width2 = protocol_button_width * 1.4  # Encore plus large pour le texte plus long
+        ax_button_cond_regen = plt.axes([protocol_x2, protocol_y, protocol_button_width2, button_height])
+        cond_regen_button = Button(ax_button_cond_regen, 'Protocole Conductance', color='darkblue')
+        # Initialement désactivé (grisé) - sera activé dynamiquement quand les conditions seront remplies
+        cond_regen_button.ax.set_facecolor('lightgray')
+        cond_regen_button.color = 'lightgray'
+        cond_regen_button.label.set_color('black')
+        cond_regen_button.active = False  # Désactivé par défaut
+        self.buttons['conductance_regen'] = cond_regen_button
+        
+        # Bouton d'annulation de régénération (initialement caché) - au-dessus des boutons protocole
+        ax_button_cancel_regen = plt.axes([protocol_x + protocol_button_width/2, protocol_y + spacing, button_width * 0.7, button_height])
         cancel_regen_button = Button(ax_button_cancel_regen, 'Cancel', color='orange')
         cancel_regen_button.ax.set_facecolor('orange')
         cancel_regen_button.color = 'orange'
@@ -247,19 +305,36 @@ class PlotManager:
         button_width = 0.1
         button_height = 0.04
         
+        # Add device buttons - en haut à gauche, empilés en colonne
+        self.setup_add_device_buttons()
+        
         # Time unit selection radio buttons (right side of trappe indicators)
         ax_radio_time_unit = plt.axes([0.50, 0.91, 0.12, 0.05])
         self.radiobuttons['time_unit'] = RadioButtons(ax_radio_time_unit, ('Secondes', 'Minutes'), active=0)
         ax_radio_time_unit.set_title('Unités de temps', fontsize=9)
         
-        # R0 textbox and buttons
-        ax_textbox_R0 = plt.axes([0.45, 0.01, button_width/2, button_height])
-        self.textboxes['R0'] = TextBox(ax_textbox_R0, 'R0', initial='')
+        # R0 textbox et boutons au-dessus du bouton Init mais plus à droite et plus haut
+        init_x = 0.89  # Position X du bouton Init
+        init_y = 0.06  # Position Y du bouton Init
+        spacing = 0.04  # Espacement vertical - définir spacing AVANT utilisation
+        r0_x = 0.92  # Aligné avec Tcons (même position X que right_column_x)
+        r0_y_start = init_y + spacing*9  # Position encore plus haute pour plus d'espace
+        compact_button_width = button_width/1.8
         
-        ax_button_update_R0 = plt.axes([0.38, 0.06, button_width/2, button_height])
+        # Premier élément: R0 display (sans label)
+        ax_r0_display = plt.axes([r0_x, r0_y_start - button_height/2, compact_button_width, button_height])
+        self.indicators['R0_display'] = ax_r0_display
+        
+        # Deuxième élément: Update R0 button
+        ax_button_update_R0 = plt.axes([r0_x, r0_y_start - spacing - button_height/2, compact_button_width, button_height])
         self.buttons['update_R0'] = Button(ax_button_update_R0, 'Update')
         
-        ax_button_R0 = plt.axes([0.52, 0.01, button_width/2, button_height])
+        # Troisième élément: R0 textbox (sans label)
+        ax_textbox_R0 = plt.axes([r0_x, r0_y_start - spacing*3 - button_height/2, compact_button_width, button_height])
+        self.textboxes['R0'] = TextBox(ax_textbox_R0, '', initial='')
+        
+        # Quatrième élément: Set R0 button - directement collé au textbox
+        ax_button_R0 = plt.axes([r0_x, r0_y_start - spacing*3 - button_height*1.5, compact_button_width, button_height])
         self.buttons['set_R0'] = Button(ax_button_R0, 'Set R0')
         
         # Push/Open and Retract/Close buttons (grayed out initially)
@@ -291,21 +366,32 @@ class PlotManager:
         # Status indicators
         self.setup_indicators()
         
-        # R0 display
-        ax_label = plt.axes([0.38, 0.01, button_width/2, button_height])
-        self.indicators['R0_display'] = ax_label
+        # R0 display - supprimé car déplacé à droite
         
-        # Delta C display - à droite du sélecteur d'unités de temps
-        ax_delta_c = plt.axes([0.65, 0.92, button_width/1.5, button_height])
+        # Delta C display - position décalée plus à droite
+        ax_delta_c = plt.axes([0.68, 0.92, button_width/2.2, button_height])
         ax_delta_c.text(0.5, 0.5, "Delta C: 0 ppm", ha="center", va="center", transform=ax_delta_c.transAxes)
         ax_delta_c.axis('off')
         self.indicators['delta_c_display'] = ax_delta_c
         
-        # Carbon mass display - à droite du sélecteur d'unités de temps
-        ax_carbon_mass = plt.axes([0.80, 0.92, button_width/1.5, button_height])
+        # Carbon mass display - position décalée plus à droite
+        ax_carbon_mass = plt.axes([0.78, 0.92, button_width/2.2, button_height])
         ax_carbon_mass.text(0.5, 0.5, "Masse C: 0 µg", ha="center", va="center", transform=ax_carbon_mass.transAxes)
         ax_carbon_mass.axis('off')
         self.indicators['carbon_mass_display'] = ax_carbon_mass
+        
+        # Percolation time display - position décalée plus à droite
+        ax_percolation_time = plt.axes([0.88, 0.92, button_width/2.2, button_height])
+        ax_percolation_time.text(0.5, 0.5, "T perco: 0 s", ha="center", va="center", transform=ax_percolation_time.transAxes)
+        ax_percolation_time.axis('off')
+        self.indicators['percolation_time_display'] = ax_percolation_time
+        
+        # Indicateur de sauvegarde de secours - en dessous de la masse de carbone
+        ax_backup_indicator = plt.axes([0.86, 0.89, button_width/1.5, button_height * 0.8])
+        ax_backup_indicator.text(0.5, 0.5, "Dernière sauvegarde: --:--:--", fontsize=7, 
+                                 ha="center", va="center", transform=ax_backup_indicator.transAxes)
+        ax_backup_indicator.axis('off')
+        self.indicators['backup_status'] = ax_backup_indicator
         
         # Init button (blue)
         ax_button_init = plt.axes([0.89, 0.06, button_width, button_height])
@@ -314,6 +400,46 @@ class PlotManager:
         init_button.ax.set_facecolor('lightblue')
         init_button.color = 'lightblue'
         self.buttons['init'] = init_button
+        
+    def setup_add_device_buttons(self):
+        """Configuration des boutons pour ajouter des appareils pendant l'exécution"""
+        button_width = 0.1
+        button_height = 0.03
+        
+        # Position initiale des éléments
+        title_x = 0.01
+        title_width = 0.12
+        title_y = 0.97
+        button_x = title_x + title_width/2 - button_width/2  # Centré sous le titre
+        
+        # Créer un titre pour le groupe de boutons
+        ax_title = plt.axes([title_x, title_y, title_width, 0.02])
+        ax_title.text(0.5, 0.5, "Ajouter appareils", ha="center", va="center", transform=ax_title.transAxes, fontweight='bold', fontsize=8)
+        ax_title.axis('off')
+        
+        # Stockage des informations de position pour le décalage dynamique
+        self.add_device_button_info = {
+            'arduino': {'index': 0, 'visible_index': 0, 'color': 'lightskyblue', 'label': 'Arduino'},
+            'regen': {'index': 1, 'visible_index': 1, 'color': 'lightcoral', 'label': 'Régénération'},
+            'keithley': {'index': 2, 'visible_index': 2, 'color': 'lightgreen', 'label': 'Keithley'}
+        }
+        
+        # Créer les boutons mais ne pas les positionner encore
+        # Les positions seront ajustées dynamiquement dans update_add_device_buttons
+        for device_type, info in self.add_device_button_info.items():
+            # Position initiale (sera ajustée plus tard)
+            y_pos = title_y - 0.03 - info['index'] * (button_height + 0.01)
+            ax_button = plt.axes([button_x, y_pos, button_width, button_height])
+            
+            button = Button(ax_button, info['label'], color=info['color'])
+            button.ax.set_facecolor(info['color'])
+            button.color = info['color']
+            button.active = True
+            button.label.set_fontsize(8)  # Réduire la taille du texte
+            self.add_device_buttons[device_type] = button
+            
+            # Par défaut, tous les boutons sont cachés
+            button.ax.set_visible(False)
     
     def setup_indicators(self):
         """Set up status indicators"""
@@ -574,6 +700,7 @@ class PlotManager:
             if results is not None:
                 delta_c = results.get('delta_c', 0)
                 carbon_mass = results.get('carbon_mass', 0)
+                percolation_time = results.get('percolation_time', 0)
                 
                 # Mise à jour de l'afficheur Delta C
                 if 'delta_c_display' in self.indicators:
@@ -590,6 +717,15 @@ class PlotManager:
                     ax_carbon_mass.text(0.5, 0.5, f"Masse C: {carbon_mass:.2f} µg", 
                                       ha="center", va="center", transform=ax_carbon_mass.transAxes)
                     ax_carbon_mass.axis('off')
+                
+                # Mise à jour de l'afficheur du temps de percolation
+                if 'percolation_time_display' in self.indicators:
+                    ax_percolation_time = self.indicators['percolation_time_display']
+                    ax_percolation_time.clear()
+                    # Toujours afficher en secondes, quelle que soit la durée
+                    ax_percolation_time.text(0.5, 0.5, f"T perco: {percolation_time:.1f} s", 
+                                          ha="center", va="center", transform=ax_percolation_time.transAxes)
+                    ax_percolation_time.axis('off')
             
         regeneration_button.ax.figure.canvas.draw_idle()
         
@@ -637,6 +773,17 @@ class PlotManager:
             if 'max_slope_time' in events and events['max_slope_time']:
                 event_time = events['max_slope_time'] / 60.0 if self.display_minutes else events['max_slope_time']
                 ax.axvline(x=event_time, color='orange', linestyle=':', linewidth=1.5, label='Pente maximale')
+                has_markers = True
+                
+            # Nouveaux marqueurs pour les étapes post-régénération
+            if 'conductance_decrease_time' in events and events['conductance_decrease_time']:
+                event_time = events['conductance_decrease_time'] / 60.0 if self.display_minutes else events['conductance_decrease_time']
+                ax.axvline(x=event_time, color='purple', linestyle=':', linewidth=1.5, label='Décroissance < 5 µS')
+                has_markers = True
+                
+            if 'post_regen_stability_time' in events and events['post_regen_stability_time']:
+                event_time = events['post_regen_stability_time'] / 60.0 if self.display_minutes else events['post_regen_stability_time']
+                ax.axvline(x=event_time, color='cyan', linestyle=':', linewidth=1.5, label='Restabilisation post-régén')
                 has_markers = True
             
             # Afficher la légende seulement s'il y a des marqueurs
@@ -960,6 +1107,43 @@ class PlotManager:
         # Force redraw of all plots with the new time unit
         # This is normally done by the parent application during the next update cycle
             
+    def update_backup_status(self, status_info):
+        """
+        Met à jour l'indicateur de sauvegarde de secours
+        
+        Args:
+            status_info: Dictionnaire contenant les informations sur la dernière sauvegarde
+                'time': float - Timestamp de la dernière sauvegarde
+                'success': bool - True si la sauvegarde a réussi
+                'reason': str - Raison de la sauvegarde
+        """
+        if 'backup_status' not in self.indicators:
+            return
+            
+        ax = self.indicators['backup_status']
+        ax.clear()
+        
+        if not status_info or status_info.get('time') is None:
+            ax.text(0.5, 0.5, "Dernière sauvegarde: --:--:--", 
+                   fontsize=7, ha="center", va="center", transform=ax.transAxes)
+            ax.axis('off')
+            return
+        
+        # Formatage de l'heure
+        timestamp = status_info.get('time')
+        time_str = time.strftime("%H:%M:%S", time.localtime(timestamp))
+        
+        # Couleur en fonction du succès
+        color = 'green' if status_info.get('success', False) else 'red'
+        
+        # Texte de statut
+        ax.text(0.5, 0.5, f"Dernière sauvegarde: {time_str}", 
+               fontsize=7, ha="center", va="center", color=color, transform=ax.transAxes)
+        ax.axis('off')
+        
+        # Forcer le rafraîchissement
+        self.fig.canvas.draw_idle()
+    
     def close(self):
         """Close the plot window"""
         plt.close(self.fig)
@@ -968,6 +1152,81 @@ class PlotManager:
         """Show the plot window"""
         plt.show()
         
+    def update_add_device_buttons(self, available_devices=None):
+        """
+        Met à jour l'état des boutons d'ajout d'appareils en fonction des appareils déjà connectés
+        
+        Args:
+            available_devices: Dictionnaire indiquant les appareils déjà connectés
+                {'arduino': bool, 'regen': bool, 'keithley': bool}
+        """
+        if available_devices:
+            self.available_devices.update(available_devices)
+        
+        # Paramètres pour le positionnement
+        button_width = 0.1
+        button_height = 0.03
+        spacing = 0.01  # Espacement vertical entre les boutons
+        title_x = 0.01
+        title_width = 0.12
+        title_y = 0.97
+        button_x = title_x + title_width/2 - button_width/2  # Centré sous le titre
+        
+        # Calculer quels boutons doivent être visibles
+        visible_buttons = {}
+        for device_type in self.add_device_button_info:
+            # Le bouton est visible si l'appareil n'est pas connecté
+            is_visible = not self.available_devices.get(device_type, False)
+            visible_buttons[device_type] = is_visible
+        
+        # Recalculer les indices pour les boutons visibles
+        visible_count = 0
+        for device_type, info in self.add_device_button_info.items():
+            if visible_buttons[device_type]:
+                # Mettre à jour l'index visible
+                info['visible_index'] = visible_count
+                visible_count += 1
+        
+        # Mettre à jour la position et la visibilité des boutons
+        for device_type, button in self.add_device_buttons.items():
+            is_visible = visible_buttons[device_type]
+            button.ax.set_visible(is_visible)
+            
+            if is_visible:
+                # Calculer la nouvelle position Y basée sur l'index visible
+                visible_index = self.add_device_button_info[device_type]['visible_index']
+                new_y_pos = title_y - 0.03 - visible_index * (button_height + spacing)
+                
+                # Appliquer la nouvelle position
+                button.ax.set_position([button_x, new_y_pos, button_width, button_height])
+        
+        # Forcer le redessinage
+        if self.fig:
+            self.fig.canvas.draw_idle()
+    
+    def connect_add_device_button(self, device_type, callback):
+        """
+        Connecte un callback au bouton d'ajout d'appareil
+        
+        Args:
+            device_type: Type d'appareil ('arduino' ou 'regen')
+            callback: Fonction à appeler lorsque le bouton est cliqué
+        """
+        if device_type in self.add_device_buttons:
+            # Désactiver le bouton après clic pour éviter les clics multiples
+            def wrapped_callback(event):
+                # Désactiver le bouton immédiatement
+                button = self.add_device_buttons[device_type]
+                button.active = False
+                button.ax.set_facecolor('lightgray')
+                button.color = 'lightgray'
+                self.fig.canvas.draw_idle()
+                
+                # Appeler le callback
+                callback(event)
+            
+            self.add_device_buttons[device_type].on_clicked(wrapped_callback)
+    
     def set_close_callback(self, callback):
         """
         Configure a callback for when the window is closed via the X button

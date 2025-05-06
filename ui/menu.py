@@ -23,7 +23,7 @@ class MenuUI:
         self.arduino_com_var = tk.StringVar()
         self.other_com_var = tk.StringVar()
         self.arduino_baud_rate_var = tk.IntVar(value=115200)
-        self.other_baud_rate_var = tk.IntVar(value=115200)
+        self.other_baud_rate_var = tk.IntVar(value=230400)
         self.mode_manual_var = tk.IntVar(value=1)  # Présélection du mode manuel
         self.mode_auto_var = tk.IntVar()
         
@@ -38,12 +38,17 @@ class MenuUI:
         # Initialiser le mode manuel dès le démarrage
         self.set_manual_mode()
     
-    def refresh_ports(self):
-        """Actualiser la liste des ports COM disponibles"""
-        # Sauvegarder les valeurs actuelles
-        old_arduino_com = self.arduino_com_var.get()
-        old_other_com = self.other_com_var.get()
+    def scan_ports(self):
+        """
+        Analyse les ports COM disponibles et identifie les types d'appareils
         
+        Returns:
+            tuple: (ports_info, ports_display, arduino_port_index, regen_port_index)
+                - ports_info: Liste de tuples (port.device, port.description)
+                - ports_display: Liste des ports formatés pour l'affichage
+                - arduino_port_index: Index du port Arduino détecté ou None
+                - regen_port_index: Index du port de régénération détecté ou None
+        """
         # Récupérer les ports disponibles
         ports = serial.tools.list_ports.comports()
         ports_info = [(port.device, port.description) for port in ports]
@@ -60,6 +65,25 @@ class MenuUI:
             # Cherche "USB Serial Port" dans les descriptions pour le port de régénération
             elif "USB Serial Port" in description:
                 regen_port_index = i
+        
+        return ports_info, ports_display, arduino_port_index, regen_port_index
+    
+    def refresh_ports(self, show_message=True):
+        """
+        Actualiser la liste des ports COM disponibles
+        
+        Args:
+            show_message: Afficher un message de confirmation après l'actualisation
+        
+        Returns:
+            dict: Informations sur les ports détectés (pour usage externe)
+        """
+        # Sauvegarder les valeurs actuelles
+        old_arduino_com = self.arduino_com_var.get()
+        old_other_com = self.other_com_var.get()
+        
+        # Récupérer les ports et détecter les appareils
+        ports_info, ports_display, arduino_port_index, regen_port_index = self.scan_ports()
         
         # Mettre à jour les menus déroulants
         # Pour Arduino
@@ -108,26 +132,22 @@ class MenuUI:
             self.other_com_var.set("Aucun port détecté")
             self.measure_regen_var.set(0)
         
-        tk.messagebox.showinfo("Actualisation", "Liste des ports COM actualisée.")
+        # Afficher un message de confirmation si demandé
+        if show_message:
+            tk.messagebox.showinfo("Actualisation", "Liste des ports COM actualisée.")
+        
+        # Retourner les informations sur les ports pour usage externe
+        return {
+            'ports_info': ports_info,
+            'ports_display': ports_display,
+            'arduino_port_index': arduino_port_index,
+            'regen_port_index': regen_port_index
+        }
     
     def setup_ui(self):
         """Configurer les éléments de l'interface utilisateur"""
-        # Detect available COM ports
-        ports = serial.tools.list_ports.comports()
-        ports_info = [(port.device, port.description) for port in ports]
-        ports_display = [f"{port[0]} - {port[1]}" for port in ports_info]
-        
-        # Pré-sélection des ports selon leur description
-        arduino_port_index = None
-        regen_port_index = None
-        
-        for i, (_, description) in enumerate(ports_info):
-            # Cherche Arduino ou UNO dans les descriptions pour le port Arduino
-            if "Arduino" in description or "UNO" in description:
-                arduino_port_index = i
-            # Cherche "USB Serial Port" dans les descriptions pour le port de régénération
-            elif "USB Serial Port" in description:
-                regen_port_index = i
+        # Initialiser avec le scan des ports
+        ports_info, ports_display, arduino_port_index, regen_port_index = self.scan_ports()
         
         # Arduino port selection
         tk.Label(self.window, text="Port COM de l'Arduino:").grid(row=0, column=0, padx=10, pady=10, sticky='w')

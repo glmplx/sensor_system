@@ -8,6 +8,8 @@ import time
 import os
 import signal
 import threading
+import serial
+import pyvisa
 import matplotlib.pyplot as plt
 from datetime import datetime
 
@@ -252,6 +254,28 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
     measure_res_temp_active = False  # This is the runtime state
     escape_pressed = False
     
+    # Variables pour la sauvegarde de secours
+    last_backup_time = time.time()
+    backup_interval = 120  # Sauvegarde automatique toutes les 2 minutes (en secondes)
+    last_notification_time = time.time()  # Pour limiter les notifications
+    notification_cooldown = 30  # 30 secondes entre les notifications
+    emergency_mode = False  # Indique si on est en mode d'urgence
+    device_error_count = {
+        'arduino': 0,
+        'regen': 0,
+        'keithley': 0
+    }
+    error_threshold = 5  # Nombre d'erreurs à partir duquel on déclenche une sauvegarde
+    
+    # Configuration pour le scan automatique des périphériques
+    scan_for_devices_interval = 30  # Intervalle de scan en secondes (0 pour désactiver)
+    last_device_scan_time = time.time()  # Temps du dernier scan
+    last_backup_status = {
+        'time': None,
+        'success': False,
+        'reason': "Aucune sauvegarde effectuée"
+    }
+    
     # Function to handle window X button close event
     def handle_window_close(event=None):
         nonlocal escape_pressed
@@ -273,6 +297,17 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         measure_co2=bool(measure_co2), 
         measure_regen=bool(measure_regen)
     )
+    
+    # Mettre à jour l'état des boutons d'ajout d'appareils
+    plot_manager.update_add_device_buttons({
+        'arduino': arduino_connected,
+        'regen': regen_connected,
+        'keithley': keithley_connected
+    })
+    
+    # Initialiser l'indicateur de sauvegarde
+    if hasattr(plot_manager, 'update_backup_status'):
+        plot_manager.update_backup_status(last_backup_status)
     
     # Désactiver le bouton de régénération initialement - sera activé uniquement quand
     # les mesures CO2 et Tcons/Tmes seront activées simultanément
@@ -381,8 +416,8 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         update_regeneration_button_state()
         
     def update_regeneration_button_state():
-        """Met à jour l'état du bouton de régénération en fonction des mesures actives"""
-        # Le bouton de régénération ne doit être actif que si CO2 et Tcons/Tmes sont actifs
+        """Met à jour l'état des boutons de protocole en fonction des mesures actives"""
+        # 1. Bouton de protocole CO2 - doit être actif si CO2 et Tcons/Tmes sont actifs
         if 'regeneration' in plot_manager.buttons:
             regeneration_button = plot_manager.buttons['regeneration']
             
@@ -404,6 +439,29 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
             
             # Forcer la mise à jour du canvas
             regeneration_button.ax.figure.canvas.draw_idle()
+            
+        # 2. Bouton de protocole conductance - doit être actif si conductance et Tcons/Tmes sont actifs
+        if 'conductance_regen' in plot_manager.buttons:
+            cond_regen_button = plot_manager.buttons['conductance_regen']
+            
+            # Si les deux mesures nécessaires sont actives et qu'on n'est pas déjà en protocole conductance
+            if measure_conductance_active and measure_res_temp_active and not measurements.conductance_regen_in_progress:
+                # Activer le bouton
+                cond_regen_button.ax.set_facecolor('darkblue')
+                cond_regen_button.color = 'darkblue'
+                cond_regen_button.label.set_color('white')
+                cond_regen_button.active = True
+            else:
+                # Désactiver le bouton si les conditions ne sont pas réunies
+                # et qu'on n'est pas déjà en protocole conductance
+                if not measurements.conductance_regen_in_progress:
+                    cond_regen_button.ax.set_facecolor('lightgray')
+                    cond_regen_button.color = 'lightgray'
+                    cond_regen_button.label.set_color('black')
+                    cond_regen_button.active = False
+            
+            # Forcer la mise à jour du canvas
+            cond_regen_button.ax.figure.canvas.draw_idle()
     
     def raz_conductance(event):
         # Préparer les données pour l'essai cumulé sans créer de nouvelle feuille
@@ -539,38 +597,46 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                 data_handler.temp_res_file is not None
             )
             
-            # Sauvegarder les données si elles sont en cours d'acquisition
-            if measure_conductance_active and measurements.timeList and len(measurements.timeList) > 0:
-                print("Sauvegarde des données de conductance avant fermeture...")
-                sheet_name = f"Cond_{datetime.now().strftime('%H%M%S')}"
-                data_handler.save_conductance_data(
-                    measurements.timeList,
-                    measurements.conductanceList,
-                    measurements.resistanceList
-                )
+            # Vérifier si nous avons eu une sauvegarde d'urgence récente
+            current_time = time.time()
+            recent_emergency_backup = hasattr(perform_emergency_backup, 'last_emergency_time') and \
+                                    (current_time - perform_emergency_backup.last_emergency_time < 60)
                 
-            if measure_co2_temp_humidity_active and ((measurements.timestamps_co2 and len(measurements.timestamps_co2) > 0) or \
-               (measurements.timestamps_temp and len(measurements.timestamps_temp) > 0) or \
-               (measurements.timestamps_humidity and len(measurements.timestamps_humidity) > 0)):
-                print("Sauvegarde des données CO2/temp/humidity avant fermeture...")
-                sheet_name = f"CO2_{datetime.now().strftime('%H%M%S')}"
-                data_handler.save_co2_temp_humidity_data(
-                    measurements.timestamps_co2,
-                    measurements.values_co2,
-                    measurements.timestamps_temp,
-                    measurements.values_temp,
-                    measurements.timestamps_humidity,
-                    measurements.values_humidity
-                )
+            if recent_emergency_backup:
+                print("Une sauvegarde d'urgence a été effectuée récemment. Pas besoin de sauvegarder à nouveau.")
+            else:
+                # Sauvegarder les données si elles sont en cours d'acquisition
+                if measure_conductance_active and measurements.timeList and len(measurements.timeList) > 0:
+                    print("Sauvegarde des données de conductance avant fermeture...")
+                    sheet_name = f"Cond_{datetime.now().strftime('%H%M%S')}"
+                    data_handler.save_conductance_data(
+                        measurements.timeList,
+                        measurements.conductanceList,
+                        measurements.resistanceList
+                    )
                 
-            if measure_res_temp_active and measurements.timestamps_res_temp and len(measurements.timestamps_res_temp) > 0:
-                print("Sauvegarde des données temp/resistance avant fermeture...")
-                sheet_name = f"Temp_{datetime.now().strftime('%H%M%S')}"
-                data_handler.save_temp_res_data(
-                    measurements.timestamps_res_temp,
-                    measurements.temperatures,
-                    measurements.Tcons_values
-                )
+                if measure_co2_temp_humidity_active and ((measurements.timestamps_co2 and len(measurements.timestamps_co2) > 0) or \
+                   (measurements.timestamps_temp and len(measurements.timestamps_temp) > 0) or \
+                   (measurements.timestamps_humidity and len(measurements.timestamps_humidity) > 0)):
+                    print("Sauvegarde des données CO2/temp/humidity avant fermeture...")
+                    sheet_name = f"CO2_{datetime.now().strftime('%H%M%S')}"
+                    data_handler.save_co2_temp_humidity_data(
+                        measurements.timestamps_co2,
+                        measurements.values_co2,
+                        measurements.timestamps_temp,
+                        measurements.values_temp,
+                        measurements.timestamps_humidity,
+                        measurements.values_humidity
+                    )
+                    
+                if measure_res_temp_active and measurements.timestamps_res_temp and len(measurements.timestamps_res_temp) > 0:
+                    print("Sauvegarde des données temp/resistance avant fermeture...")
+                    sheet_name = f"Temp_{datetime.now().strftime('%H%M%S')}"
+                    data_handler.save_temp_res_data(
+                        measurements.timestamps_res_temp,
+                        measurements.temperatures,
+                        measurements.Tcons_values
+                    )
                 
             # Forcer la création des feuilles cumulées pour tous les fichiers initialisés
             if data_handler.conductance_file and data_handler.conductance_series_count >= 2:
@@ -684,6 +750,517 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
             toggle_co2_temp_humidity(event)
         if measure_regen:
             toggle_res_temp(event)
+            
+        # Mettre à jour l'état des boutons de protocole après avoir basculé toutes les mesures
+        update_regeneration_button_state()
+            
+    def perform_emergency_backup(reason="sauvegarde automatique"):
+        """
+        Effectue une sauvegarde d'urgence des données en cas de problème avec un appareil
+        ou périodiquement pour éviter la perte de données
+        
+        Args:
+            reason: Raison de la sauvegarde (pour le journal et les notifications)
+            
+        Returns:
+            bool: True si des données ont été sauvegardées, False sinon
+        """
+        nonlocal last_backup_status, emergency_mode
+        
+        try:
+            data_saved = False
+            timestamp = time.time()
+            backup_time_str = time.strftime("%H:%M:%S", time.localtime(timestamp))
+            has_active_measurements = measure_conductance_active or measure_co2_temp_humidity_active or measure_res_temp_active
+            
+            # Si aucune mesure n'est active, pas besoin de sauvegarde
+            if not has_active_measurements:
+                print(f"Aucune mesure active - pas de sauvegarde nécessaire")
+                last_backup_status = {
+                    'time': timestamp,
+                    'success': True,
+                    'reason': "Aucune mesure active"
+                }
+                return False
+            
+            # N'afficher qu'un message court si c'est une sauvegarde automatique en mode normal
+            if "automatique" in reason and not emergency_mode:
+                print(f"\n--- Sauvegarde automatique ({backup_time_str}) ---")
+            else:
+                print(f"\n=== SAUVEGARDE D'URGENCE ({backup_time_str}) : {reason} ===")
+            
+            # Sauvegarde des données de conductance si actives
+            if measure_conductance_active and measurements.timeList and len(measurements.timeList) > 0:
+                try:
+                    print(f"Sauvegarde des données de conductance...")
+                    data_handler.save_conductance_data(
+                        measurements.timeList,
+                        measurements.conductanceList,
+                        measurements.resistanceList
+                    )
+                    print(f"✓ {len(measurements.timeList)} points de conductance sauvegardés")
+                    data_saved = True
+                except Exception as e:
+                    print(f"✗ Erreur lors de la sauvegarde des données de conductance: {e}")
+            
+            # Sauvegarde des données CO2/temp/humidity si actives
+            if measure_co2_temp_humidity_active and measurements.timestamps_co2 and len(measurements.timestamps_co2) > 0:
+                try:
+                    print(f"Sauvegarde des données CO2/température/humidité...")
+                    data_handler.save_co2_temp_humidity_data(
+                        measurements.timestamps_co2,
+                        measurements.values_co2,
+                        measurements.timestamps_temp,
+                        measurements.values_temp,
+                        measurements.timestamps_humidity,
+                        measurements.values_humidity
+                    )
+                    print(f"✓ {len(measurements.timestamps_co2)} points de CO2/T/H sauvegardés")
+                    data_saved = True
+                except Exception as e:
+                    print(f"✗ Erreur lors de la sauvegarde des données CO2/T/H: {e}")
+            
+            # Sauvegarde des données de température/résistance si actives
+            if measure_res_temp_active and measurements.timestamps_res_temp and len(measurements.timestamps_res_temp) > 0:
+                try:
+                    print(f"Sauvegarde des données de température/résistance...")
+                    data_handler.save_temp_res_data(
+                        measurements.timestamps_res_temp,
+                        measurements.temperatures,
+                        measurements.Tcons_values
+                    )
+                    print(f"✓ {len(measurements.timestamps_res_temp)} points de température/résistance sauvegardés")
+                    data_saved = True
+                except Exception as e:
+                    print(f"✗ Erreur lors de la sauvegarde des données de température/résistance: {e}")
+            
+            # Mettre à jour le statut de la dernière sauvegarde
+            last_backup_status = {
+                'time': timestamp,
+                'success': data_saved,
+                'reason': reason
+            }
+            
+            if data_saved:
+                # Afficher un message différent selon le type de sauvegarde
+                if "automatique" in reason and not emergency_mode:
+                    print(f"--- Sauvegarde terminée ({backup_time_str}) ---\n")
+                else:
+                    print(f"=== SAUVEGARDE RÉUSSIE ({backup_time_str}) ===\n")
+                
+                # Le mode d'urgence est géré dans la boucle principale
+            else:
+                # Afficher un message différent selon le type de sauvegarde
+                if "automatique" in reason and not emergency_mode:
+                    print(f"--- Aucune donnée à sauvegarder ({backup_time_str}) ---\n")
+                else:
+                    print(f"=== AUCUNE DONNÉE SAUVEGARDÉE ({backup_time_str}) ===\n")
+            
+            return data_saved
+            
+        except Exception as e:
+            print(f"=== ERREUR LORS DE LA SAUVEGARDE D'URGENCE: {e} ===\n")
+            last_backup_status = {
+                'time': time.time(),
+                'success': False,
+                'reason': f"Erreur: {str(e)}"
+            }
+            return False
+            
+    def show_backup_notification(reason):
+        """
+        Affiche une notification à l'utilisateur concernant la sauvegarde d'urgence
+        
+        Args:
+            reason: Raison de la sauvegarde
+        """
+        nonlocal last_notification_time, notification_cooldown
+        
+        current_time = time.time()
+        # Limiter les notifications pour éviter de spammer l'utilisateur
+        if current_time - last_notification_time < notification_cooldown:
+            return
+            
+        # Mettre à jour le timestamp de la dernière notification
+        last_notification_time = current_time
+        
+        try:
+            # Créer une notification visuelle dans une nouvelle fenêtre indépendante
+            import tkinter as tk
+            from tkinter import messagebox
+            
+            # Créer une fenêtre Tkinter invisible pour éviter de perturber l'interface principale
+            root = tk.Tk()
+            root.withdraw()
+            
+            # Afficher le message contextuel
+            messagebox.showinfo(
+                "Sauvegarde d'urgence",
+                f"Une sauvegarde d'urgence a été effectuée.\n\n"
+                f"Raison: {reason}\n\n"
+                f"Les données ont été sauvegardées dans le dossier des résultats."
+            )
+            
+            # Détruire la fenêtre Tkinter
+            root.destroy()
+        except Exception as e:
+            print(f"Erreur lors de l'affichage de la notification: {e}")
+            
+    def check_device_errors():
+        """
+        Vérifie les erreurs des appareils pour détecter des problèmes de connexion
+        
+        Returns:
+            dict: Informations sur les erreurs détectées
+        """
+        nonlocal device_error_count, emergency_mode, error_threshold
+        
+        errors_detected = False
+        error_info = {
+            'total_errors': sum(device_error_count.values()),
+            'arduino_errors': device_error_count['arduino'],
+            'regen_errors': device_error_count['regen'],
+            'keithley_errors': device_error_count['keithley'],
+            'critical': False,
+            'message': ""
+        }
+        
+        # Vérifier le nombre total d'erreurs
+        if error_info['total_errors'] >= error_threshold:
+            errors_detected = True
+            error_info['critical'] = True
+            
+            # Déterminer quel(s) appareil(s) cause(nt) le problème
+            problem_devices = []
+            if device_error_count['arduino'] >= 2 and arduino_connected:
+                problem_devices.append("Arduino")
+            if device_error_count['regen'] >= 2 and regen_connected:
+                problem_devices.append("Carte de régénération")
+            if device_error_count['keithley'] >= 2 and keithley_connected:
+                problem_devices.append("Keithley")
+                
+            if problem_devices:
+                device_list = ", ".join(problem_devices)
+                error_info['message'] = f"Problèmes de communication avec: {device_list}"
+            else:
+                error_info['message'] = "Problèmes de communication avec plusieurs appareils"
+        
+        # Si c'est la première détection d'une erreur critique, passer en mode d'urgence
+        if error_info['critical'] and not emergency_mode:
+            emergency_mode = True
+            print(f"\n=== ALERTE: PROBLÈMES DE COMMUNICATION DÉTECTÉS ===")
+            print(f"Appareils problématiques: {error_info['message']}")
+            print("Activation du mode de sauvegarde d'urgence")
+            print("Les données seront sauvegardées automatiquement plus fréquemment.")
+            print("=== SAUVEGARDE DE SECOURS INITIÉE ===\n")
+        
+        return error_info
+            
+    def add_arduino_device(event):
+        """Fonction pour ajouter un Arduino en cours d'exécution"""
+        nonlocal arduino, arduino_connected, measure_co2
+        
+        if arduino_connected:
+            return  # L'Arduino est déjà connecté
+        
+        # Utiliser la classe MenuUI pour détecter automatiquement le port Arduino
+        from ui.menu import MenuUI
+        
+        # Créer une instance temporaire invisible pour scanner les ports
+        temp_menu = MenuUI()
+        temp_menu.window.withdraw()  # Rendre la fenêtre invisible
+        
+        # Scanner les ports disponibles
+        port_info = temp_menu.refresh_ports(show_message=False)
+        temp_menu.window.destroy()  # Fermer la fenêtre temporaire
+        
+        arduino_port = None
+        arduino_port_index = port_info.get('arduino_port_index')
+        ports_display = port_info.get('ports_display', [])
+        
+        # Si un Arduino a été détecté automatiquement
+        if arduino_port_index is not None and arduino_port_index < len(ports_display):
+            # Extraire le port COM (avant le premier espace)
+            arduino_port = ports_display[arduino_port_index].split()[0]
+            print(f"Arduino détecté automatiquement sur le port: {arduino_port}")
+        else:
+            # Si aucun Arduino n'est détecté automatiquement, ouvrir une boîte de dialogue
+            import tkinter as tk
+            from tkinter import simpledialog
+            
+            root = tk.Tk()
+            root.withdraw()  # Cacher la fenêtre principale
+            
+            # Créer une liste de choix à partir des ports disponibles
+            choices = [port.split()[0] for port in ports_display] if ports_display else [""]
+            choice_str = "\n".join([f"{i+1}. {port}" for i, port in enumerate(ports_display)])
+            
+            # Demander à l'utilisateur de choisir un port
+            port_choice = simpledialog.askinteger(
+                "Sélection du port Arduino",
+                f"Aucun Arduino n'a été détecté automatiquement.\nVeuillez sélectionner un port (numéro):\n\n{choice_str}",
+                minvalue=1, maxvalue=len(choices) if choices else 1
+            )
+            
+            if port_choice and port_choice <= len(choices):
+                arduino_port = choices[port_choice-1]
+            else:
+                # L'utilisateur a annulé ou n'a pas sélectionné de port valide
+                print("Ajout de l'Arduino annulé")
+                # Réactiver le bouton d'ajout
+                plot_manager.add_device_buttons['arduino'].active = True
+                plot_manager.add_device_buttons['arduino'].ax.set_facecolor('lightskyblue')
+                plot_manager.add_device_buttons['arduino'].color = 'lightskyblue'
+                plot_manager.fig.canvas.draw_idle()
+                return
+        
+        # Essayer de connecter l'Arduino
+        if arduino_port:
+            # Créer un nouvel appareil Arduino et tenter de le connecter
+            arduino = ArduinoDevice(port=arduino_port, baud_rate=115200)  # Valeur par défaut
+            if arduino.connect():
+                arduino_connected = True
+                measure_co2 = True  # Activer la mesure de CO2
+                
+                # Mettre à jour l'interface
+                plot_manager.update_add_device_buttons({'arduino': True})
+                plot_manager.configure_measurement_panels(
+                    measure_conductance=bool(measure_conductance),
+                    measure_co2=True,  # Maintenant disponible
+                    measure_regen=bool(measure_regen)
+                )
+                
+                # Si on était en train de mesurer le CO2, il faut redémarrer la mesure
+                if measure_co2_temp_humidity_active:
+                    toggle_co2_temp_humidity(None)  # Arrêter
+                    toggle_co2_temp_humidity(None)  # Redémarrer
+                
+                print(f"Arduino connecté avec succès sur le port {arduino_port}")
+            else:
+                # Échec de la connexion
+                print(f"Échec de la connexion à l'Arduino sur le port {arduino_port}")
+                
+                # Réactiver le bouton d'ajout
+                plot_manager.add_device_buttons['arduino'].active = True
+                plot_manager.add_device_buttons['arduino'].ax.set_facecolor('lightskyblue')
+                plot_manager.add_device_buttons['arduino'].color = 'lightskyblue'
+                plot_manager.fig.canvas.draw_idle()
+    
+    # Définir les fonctions d'ajout d'appareils
+    def add_keithley_device(event=None):
+        """Fonction pour ajouter un Keithley en cours d'exécution"""
+        nonlocal keithley, keithley_connected, measure_conductance
+        
+        if keithley_connected:
+            return  # Le Keithley est déjà connecté
+        
+        # Essayer de connecter le Keithley
+        print("Tentative de connexion au Keithley...")
+        
+        # On supprime toute instance précédente
+        if 'keithley' in globals():
+            try:
+                if hasattr(keithley, 'close'):
+                    keithley.close()
+            except:
+                pass
+            
+        # Create fresh instance
+        keithley = KeithleyDevice()
+        
+        # Temps de pause avant connexion
+        time.sleep(1)  # Attendre 1 seconde
+        
+        # Tentative de connexion
+        if keithley.connect():
+            keithley_connected = True
+            measure_conductance = True  # Activer la mesure de conductance
+            
+            # Réinitialiser les flags de déconnexion
+            add_keithley_device.disconnection_reported = False
+            
+            # IMPORTANT: Mettre à jour le dispositif dans le gestionnaire de mesures
+            # Synchronisation complète
+            if hasattr(measurements, 'read_conductance'):
+                measurements.keithley = keithley
+                # On a besoin d'une référence partagée pour le device
+                # pour que les changements soient visibles des deux côtés
+                print(f"Mise à jour du Keithley dans MeasurementManager: {keithley}")
+                print(f"Vérification état Keithley après mise à jour: measurements.keithley = {measurements.keithley}, device = {measurements.keithley.device if hasattr(measurements.keithley, 'device') else 'None'}")
+                
+                # Force la réinitialisation du flag d'erreur dans MeasurementManager
+                if hasattr(measurements, '_keithley_error_reported'):
+                    measurements._keithley_error_reported = False
+            
+            # Mettre à jour l'interface
+            plot_manager.update_add_device_buttons({'keithley': True})
+            plot_manager.configure_measurement_panels(
+                measure_conductance=True,
+                measure_co2=bool(measure_co2),
+                measure_regen=bool(measure_regen)
+            )
+            
+            print("Keithley connecté avec succès")
+        else:
+            print("Échec de la connexion au Keithley")
+            
+            # Réactiver le bouton d'ajout
+            if 'keithley' in plot_manager.add_device_buttons:
+                plot_manager.add_device_buttons['keithley'].active = True
+                plot_manager.add_device_buttons['keithley'].ax.set_facecolor('lightcoral')
+                plot_manager.add_device_buttons['keithley'].color = 'lightcoral'
+                plot_manager.fig.canvas.draw_idle()
+    
+    # Initialiser les flags de déconnexion
+    add_keithley_device.disconnection_reported = False
+    
+    def add_regen_device(event):
+        """Fonction pour ajouter une carte de régénération en cours d'exécution"""
+        nonlocal regen, regen_connected, measure_regen
+        
+        if regen_connected:
+            return  # La carte de régénération est déjà connectée
+        
+        # Utiliser la classe MenuUI pour détecter automatiquement le port
+        from ui.menu import MenuUI
+        
+        # Créer une instance temporaire invisible pour scanner les ports
+        temp_menu = MenuUI()
+        temp_menu.window.withdraw()  # Rendre la fenêtre invisible
+        
+        # Scanner les ports disponibles
+        port_info = temp_menu.refresh_ports(show_message=False)
+        temp_menu.window.destroy()  # Fermer la fenêtre temporaire
+        
+        regen_port = None
+        regen_port_index = port_info.get('regen_port_index')
+        ports_display = port_info.get('ports_display', [])
+        
+        # Si une carte de régénération a été détectée automatiquement
+        if regen_port_index is not None and regen_port_index < len(ports_display):
+            # Extraire le port COM (avant le premier espace)
+            regen_port = ports_display[regen_port_index].split()[0]
+            print(f"Carte de régénération détectée automatiquement sur le port: {regen_port}")
+        else:
+            # Si aucune carte n'est détectée automatiquement, ouvrir une boîte de dialogue
+            import tkinter as tk
+            from tkinter import simpledialog
+            
+            root = tk.Tk()
+            root.withdraw()  # Cacher la fenêtre principale
+            
+            # Créer une liste de choix à partir des ports disponibles
+            choices = [port.split()[0] for port in ports_display] if ports_display else [""]
+            choice_str = "\n".join([f"{i+1}. {port}" for i, port in enumerate(ports_display)])
+            
+            # Demander à l'utilisateur de choisir un port
+            port_choice = simpledialog.askinteger(
+                "Sélection du port pour la carte de régénération",
+                f"Aucune carte de régénération n'a été détectée automatiquement.\nVeuillez sélectionner un port (numéro):\n\n{choice_str}",
+                minvalue=1, maxvalue=len(choices) if choices else 1
+            )
+            
+            if port_choice and port_choice <= len(choices):
+                regen_port = choices[port_choice-1]
+            else:
+                # L'utilisateur a annulé ou n'a pas sélectionné de port valide
+                print("Ajout de la carte de régénération annulé")
+                # Réactiver le bouton d'ajout
+                plot_manager.add_device_buttons['regen'].active = True
+                plot_manager.add_device_buttons['regen'].ax.set_facecolor('lightcoral')
+                plot_manager.add_device_buttons['regen'].color = 'lightcoral'
+                plot_manager.fig.canvas.draw_idle()
+                return
+        
+        # Essayer de connecter la carte de régénération
+        if regen_port:
+            # Créer un nouvel appareil et tenter de le connecter
+            regen = RegenDevice(port=regen_port, baud_rate=115200)  # Valeur par défaut
+            if regen.connect():
+                regen_connected = True
+                measure_regen = True  # Activer la mesure de régénération
+                
+                # Réinitialiser les flags de déconnexion/erreur
+                if hasattr(add_regen_device, 'disconnection_reported'):
+                    add_regen_device.disconnection_reported = False
+                if hasattr(add_regen_device, 'error_reported'):
+                    add_regen_device.error_reported = False
+                
+                # IMPORTANT: Mettre à jour le dispositif dans le gestionnaire de mesures
+                measurements.regen = regen
+                print(f"Mise à jour du dispositif dans MeasurementManager: {regen}")
+                
+                # Mettre à jour l'interface
+                plot_manager.update_add_device_buttons({'regen': True})
+                plot_manager.configure_measurement_panels(
+                    measure_conductance=bool(measure_conductance),
+                    measure_co2=bool(measure_co2),
+                    measure_regen=True  # Maintenant disponible
+                )
+                
+                # Si on était en train de mesurer la température, il faut redémarrer la mesure
+                if measure_res_temp_active:
+                    toggle_res_temp(None)  # Arrêter
+                    toggle_res_temp(None)  # Redémarrer
+                
+                print(f"Carte de régénération connectée avec succès sur le port {regen_port}")
+                
+                # Test silencieux pour vérifier que la communication fonctionne
+                measurements.read_R0()
+            else:
+                # Échec de la connexion
+                print(f"Échec de la connexion à la carte de régénération sur le port {regen_port}")
+                
+                # Réactiver le bouton d'ajout
+                plot_manager.add_device_buttons['regen'].active = True
+                plot_manager.add_device_buttons['regen'].ax.set_facecolor('lightcoral')
+                plot_manager.add_device_buttons['regen'].color = 'lightcoral'
+                plot_manager.fig.canvas.draw_idle()
+    
+    def start_conductance_regen(event):
+        """Handle conductance regeneration button click"""
+        # Only do something if button is active and not already in protocol
+        if hasattr(plot_manager.buttons['conductance_regen'], 'active') and plot_manager.buttons['conductance_regen'].active:
+            # Start conductance regeneration protocol
+            success = measurements.start_conductance_regen_protocol()
+            if success:
+                # Update button state
+                plot_manager.update_regeneration_status({
+                    'active': True,
+                    'step': 1,
+                    'message': "Starting conductance protocol",
+                    'progress': 0
+                })
+                # Button will be reactivated when regeneration completes
+                
+                # Mettre à jour l'état du bouton
+                regeneration_button = plot_manager.buttons['conductance_regen']
+                regeneration_button.ax.set_facecolor('lightgray')
+                regeneration_button.color = 'lightgray'
+                regeneration_button.label.set_color('black')
+                regeneration_button.active = False
+    
+    def cancel_conductance_regen(event):
+        """Handle conductance regeneration cancel button click"""
+        # Use the same cancel button as regular regeneration
+        if hasattr(plot_manager.buttons['cancel_regeneration'], 'active') and plot_manager.buttons['cancel_regeneration'].active:
+            # Cancel regeneration protocol
+            success = measurements.cancel_conductance_regen_protocol()
+            if success:
+                # Update button state
+                plot_manager.update_regeneration_status({
+                    'active': False,
+                    'step': 0,
+                    'message': "Conductance protocol cancelled",
+                    'progress': 0
+                })
+                
+                # Réactiver le bouton de protocole de conductance
+                regeneration_button = plot_manager.buttons['conductance_regen']
+                regeneration_button.ax.set_facecolor('darkblue')
+                regeneration_button.color = 'darkblue'
+                regeneration_button.label.set_color('white')
+                regeneration_button.active = True
     
     # Connect event handlers
     plot_manager.connect_button('conductance', toggle_conductance)
@@ -701,7 +1278,91 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
     plot_manager.connect_button('init', init_system)
     plot_manager.connect_button('regeneration', start_regeneration)
     plot_manager.connect_button('cancel_regeneration', cancel_regeneration)
+    plot_manager.connect_button('conductance_regen', start_conductance_regen)
     plot_manager.connect_button('quit', quit_program)
+    
+    def add_keithley_device(event):
+        """Fonction pour ajouter un Keithley en cours d'exécution"""
+        nonlocal keithley, keithley_connected, measure_conductance
+        
+        if keithley_connected:
+            return  # Le Keithley est déjà connecté
+        
+        # Essayer de connecter le Keithley (il n'a pas besoin de port série)
+        import tkinter as tk
+        from tkinter import messagebox
+        
+        print("Tentative de connexion au Keithley...")
+        
+        # Créer un nouvel appareil Keithley et tenter de le connecter
+        keithley = KeithleyDevice()
+        
+        try:
+            if keithley.connect():
+                keithley_connected = True
+                measure_conductance = True  # Activer la mesure de conductance
+                
+                # Mettre à jour l'interface
+                plot_manager.update_add_device_buttons({'keithley': True})
+                plot_manager.configure_measurement_panels(
+                    measure_conductance=True,  # Maintenant disponible
+                    measure_co2=bool(measure_co2),
+                    measure_regen=bool(measure_regen)
+                )
+                
+                # Si on était en train de mesurer la conductance, il faut redémarrer la mesure
+                if measure_conductance_active:
+                    toggle_conductance(None)  # Arrêter
+                    toggle_conductance(None)  # Redémarrer
+                
+                print("Keithley connecté avec succès")
+                
+                # Afficher un message de succès
+                root = tk.Tk()
+                root.withdraw()
+                messagebox.showinfo("Connexion réussie", "Keithley connecté avec succès.\nLa mesure de conductance est maintenant disponible.")
+                root.destroy()
+            else:
+                # Échec de la connexion
+                print("Échec de la connexion au Keithley")
+                
+                # Afficher un message d'erreur
+                root = tk.Tk()
+                root.withdraw()
+                messagebox.showerror("Erreur de connexion", 
+                                   "Impossible de se connecter au Keithley.\n\n"
+                                   "Vérifiez que :\n"
+                                   "- L'appareil est bien allumé\n"
+                                   "- Le câble USB est correctement branché\n"
+                                   "- Aucun autre logiciel n'utilise déjà l'appareil")
+                root.destroy()
+                
+                # Réactiver le bouton d'ajout
+                plot_manager.add_device_buttons['keithley'].active = True
+                plot_manager.add_device_buttons['keithley'].ax.set_facecolor('lightgreen')
+                plot_manager.add_device_buttons['keithley'].color = 'lightgreen'
+                plot_manager.fig.canvas.draw_idle()
+        except Exception as e:
+            print(f"Erreur lors de la connexion au Keithley: {e}")
+            
+            # Afficher un message d'erreur
+            root = tk.Tk()
+            root.withdraw()
+            messagebox.showerror("Erreur de connexion", 
+                               f"Erreur lors de la connexion au Keithley:\n{str(e)}\n\n"
+                               "Vérifiez que les pilotes sont correctement installés.")
+            root.destroy()
+            
+            # Réactiver le bouton d'ajout
+            plot_manager.add_device_buttons['keithley'].active = True
+            plot_manager.add_device_buttons['keithley'].ax.set_facecolor('lightgreen')
+            plot_manager.add_device_buttons['keithley'].color = 'lightgreen'
+            plot_manager.fig.canvas.draw_idle()
+    
+    # Connect add device buttons
+    plot_manager.connect_add_device_button('arduino', add_arduino_device)
+    plot_manager.connect_add_device_button('regen', add_regen_device)
+    plot_manager.connect_add_device_button('keithley', add_keithley_device)
     
     # Connect radiobutton for time unit selection
     plot_manager.connect_radiobutton('time_unit', plot_manager.on_time_unit_change)
@@ -712,85 +1373,348 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         
         # Lire toutes les données disponibles du port série
         # Vérifier si données disponibles et les traiter en fonction du mode actif
-        for _ in range(10):  # Lire jusqu'à 10 lignes par itération pour vider le buffer
-            line = None
-            if arduino.device and hasattr(arduino.device, 'in_waiting') and arduino.device.in_waiting > 0:
+        # Ne tenter de lire que si l'Arduino est connecté
+        if arduino_connected:
+            for _ in range(10):  # Lire jusqu'à 10 lignes par itération pour vider le buffer
+                line = None
                 try:
-                    line = arduino.device.readline().decode('utf-8', errors='ignore').strip()
+                    # Vérification sécurisée pour éviter les erreurs série critiques
+                    if arduino.device and hasattr(arduino.device, 'in_waiting'):
+                        try:
+                            # Tenter d'accéder à in_waiting de manière sécurisée
+                            waiting_bytes = arduino.device.in_waiting
+                            if waiting_bytes > 0:
+                                line = arduino.device.readline().decode('utf-8', errors='ignore').strip()
+                        except (serial.SerialException, IOError, OSError, PermissionError) as serial_err:
+                            print(f"Erreur critique sur le port série Arduino: {serial_err}")
+                            device_error_count['arduino'] += 2  # Augmentation plus importante pour les erreurs critiques
+                            # Tentative de fermeture et réinitialisation de l'appareil
+                            try:
+                                if arduino.device:
+                                    arduino.device.close()
+                            except:
+                                pass  # Ignorer les erreurs lors de la fermeture
+                            arduino.device = None
+                            arduino_connected = False
+                            # Mettre à jour l'interface
+                            plot_manager.update_add_device_buttons({'arduino': False})
+                            
+                            # Mettre automatiquement en pause la mesure de CO2/temp/humidity
+                            if measure_co2_temp_humidity_active:
+                                print("Mise en pause automatique de la mesure de CO2/température/humidité")
+                                
+                                # Sauvegarder immédiatement les données de CO2/temp/humidity
+                                if ((measurements.timestamps_co2 and len(measurements.timestamps_co2) > 0) or
+                                    (measurements.timestamps_temp and len(measurements.timestamps_temp) > 0) or
+                                    (measurements.timestamps_humidity and len(measurements.timestamps_humidity) > 0)):
+                                    
+                                    print("Sauvegarde immédiate des données de CO2/temp/humidity suite à la déconnexion...")
+                                    try:
+                                        # S'assurer que le fichier est initialisé
+                                        if not co2_temp_humidity_file_initialized:
+                                            data_handler.initialize_file("co2_temp_humidity")
+                                            co2_temp_humidity_file_initialized = True
+                                        
+                                        # Sauvegarde
+                                        data_handler.save_co2_temp_humidity_data(
+                                            measurements.timestamps_co2,
+                                            measurements.values_co2,
+                                            measurements.timestamps_temp,
+                                            measurements.values_temp,
+                                            measurements.timestamps_humidity,
+                                            measurements.values_humidity
+                                        )
+                                        print(f"✓ {len(measurements.timestamps_co2)} points de CO2/temp/humidity sauvegardés")
+                                    except Exception as e:
+                                        print(f"Erreur lors de la sauvegarde des données de CO2/temp/humidity: {e}")
+                                
+                                measure_co2_temp_humidity_active = False
+                                # Mettre à jour l'interface
+                                if 'co2_temp_humidity' in plot_manager.buttons:
+                                    plot_manager.buttons['co2_temp_humidity'].ax.set_facecolor('darkred')
+                                    plot_manager.buttons['co2_temp_humidity'].color = 'darkred'
+                                    plot_manager.buttons['co2_temp_humidity'].label.set_color('white')
+                                    plot_manager.fig.canvas.draw_idle()
+                            
+                            # Sauvegarde d'urgence seulement si pas de sauvegarde récente
+                            current_time = time.time()
+                            if (not hasattr(perform_emergency_backup, 'last_emergency_time') or 
+                                current_time - perform_emergency_backup.last_emergency_time >= 60):
+                                perform_emergency_backup("Déconnexion Arduino détectée")
+                                # Mettre à jour le timestamp pour éviter les sauvegardes en rafale
+                                perform_emergency_backup.last_emergency_time = current_time
+                                
+                            # Sortir complètement des tentatives de lecture
+                            break
+                        except Exception as e:
+                            print(f"Error reading from Arduino: {e}")
+                            device_error_count['arduino'] += 1
                 except Exception as e:
-                    print(f"Error reading from Arduino: {e}")
-            
-            if not line:
-                break  # Aucune donnée disponible, sortir de la boucle
+                    # Ne pas spammer la console - réduire les messages d'erreur
+                    # Incrémenter le compteur quand même
+                    device_error_count['arduino'] += 1
+                    
+                    # N'afficher l'erreur que toutes les 20 itérations environ
+                    if sum(device_error_count.values()) % 20 == 0:
+                        print(f"Erreur générale lors de l'accès à l'Arduino: {e}")
+                        
+                    # Si on a une erreur générale, marquer l'Arduino comme déconnecté
+                    arduino.device = None
+                    arduino_connected = False
+                    plot_manager.update_add_device_buttons({'arduino': False})
+                    
+                    # Mettre automatiquement en pause la mesure de CO2/temp/humidity
+                    if measure_co2_temp_humidity_active:
+                        print("Mise en pause automatique de la mesure de CO2/température/humidité")
+                        
+                        # Sauvegarder immédiatement les données de CO2/temp/humidity
+                        if ((measurements.timestamps_co2 and len(measurements.timestamps_co2) > 0) or
+                            (measurements.timestamps_temp and len(measurements.timestamps_temp) > 0) or
+                            (measurements.timestamps_humidity and len(measurements.timestamps_humidity) > 0)):
+                            
+                            print("Sauvegarde immédiate des données de CO2/temp/humidity suite à la déconnexion...")
+                            try:
+                                # S'assurer que le fichier est initialisé
+                                if not co2_temp_humidity_file_initialized:
+                                    data_handler.initialize_file("co2_temp_humidity")
+                                    co2_temp_humidity_file_initialized = True
+                                
+                                # Sauvegarde
+                                data_handler.save_co2_temp_humidity_data(
+                                    measurements.timestamps_co2,
+                                    measurements.values_co2,
+                                    measurements.timestamps_temp,
+                                    measurements.values_temp,
+                                    measurements.timestamps_humidity,
+                                    measurements.values_humidity
+                                )
+                                print(f"✓ {len(measurements.timestamps_co2)} points de CO2/temp/humidity sauvegardés")
+                            except Exception as e:
+                                print(f"Erreur lors de la sauvegarde des données de CO2/temp/humidity: {e}")
+                        
+                        measure_co2_temp_humidity_active = False
+                        # Mettre à jour l'interface
+                        if 'co2_temp_humidity' in plot_manager.buttons:
+                            plot_manager.buttons['co2_temp_humidity'].ax.set_facecolor('darkred')
+                            plot_manager.buttons['co2_temp_humidity'].color = 'darkred'
+                            plot_manager.buttons['co2_temp_humidity'].label.set_color('white')
+                            plot_manager.fig.canvas.draw_idle()
+                    break
                 
-            # Traiter les états des pins (pour les voyants)
-            if "VR:" in line and "VS:" in line and "TO:" in line and "TF:" in line:
-                try:
-                    # Parse individual pin states
-                    vr_part = line.split("VR:")[1].split()[0]
-                    vs_part = line.split("VS:")[1].split()[0]
-                    to_part = line.split("TO:")[1].split()[0]
-                    tf_part = line.split("TF:")[1].split()[0]
-                    
-                    # Clarify status parsing (HIGH = True, LOW = False)
-                    vr_state = vr_part == "HIGH"
-                    vs_state = vs_part == "HIGH"
-                    to_state = to_part == "HIGH"
-                    tf_state = tf_part == "HIGH"
-                    
-                    # Store the pin states for UI updating
-                    measurements.pin_states = {
-                        'vr': vr_state,  # Vérin Rentré
-                        'vs': vs_state,  # Vérin Sorti
-                        'to': to_state,  # Trappe Ouverte
-                        'tf': tf_state   # Trappe Fermée
-                    }
-                    
-                    # Update indicator LEDs if pin states changed
-                    plot_manager.update_sensor_indicators(measurements.pin_states)
-                except Exception as e:
-                    print(f"Error parsing pin states: {e}, line: {line}")
-            
-            # Traiter les données CO2/temp/humidity uniquement si le mode est actif
-            elif line.startswith('@') and measure_co2 and measure_co2_temp_humidity_active:
-                data = line[1:].split()
-                if len(data) == 3:
+                if not line:
+                    break  # Aucune donnée disponible, sortir de la boucle
+                
+                # Traiter les états des pins (pour les voyants)
+                if "VR:" in line and "VS:" in line and "TO:" in line and "TF:" in line:
                     try:
-                        co2 = float(data[0])
-                        temperature = float(data[1])
-                        humidity = float(data[2])
+                        # Parse individual pin states
+                        vr_part = line.split("VR:")[1].split()[0]
+                        vs_part = line.split("VS:")[1].split()[0]
+                        to_part = line.split("TO:")[1].split()[0]
+                        tf_part = line.split("TF:")[1].split()[0]
                         
-                        # Only initialize start_time when we actually get data to plot
-                        if measurements.start_time_co2_temp_humidity is None:
-                            measurements.start_time_co2_temp_humidity = current_time
+                        # Clarify status parsing (HIGH = True, LOW = False)
+                        vr_state = vr_part == "HIGH"
+                        vs_state = vs_part == "HIGH"
+                        to_state = to_part == "HIGH"
+                        tf_state = tf_part == "HIGH"
                         
-                        # Calculate timestamp
-                        timestamp = current_time - measurements.start_time_co2_temp_humidity - measurements.elapsed_time_co2_temp_humidity
+                        # Store the pin states for UI updating
+                        measurements.pin_states = {
+                            'vr': vr_state,  # Vérin Rentré
+                            'vs': vs_state,  # Vérin Sorti
+                            'to': to_state,  # Trappe Ouverte
+                            'tf': tf_state   # Trappe Fermée
+                        }
                         
-                        # Store data
-                        measurements.timestamps_co2.append(timestamp)
-                        measurements.values_co2.append(co2)
-                        measurements.timestamps_temp.append(timestamp)
-                        measurements.values_temp.append(temperature)
-                        measurements.timestamps_humidity.append(timestamp)
-                        measurements.values_humidity.append(humidity)
-                        
-                        # Update plot
-                        plot_manager.update_co2_temp_humidity_plot(
-                            measurements.timestamps_co2,
-                            measurements.values_co2,
-                            measurements.timestamps_temp,
-                            measurements.values_temp,
-                            measurements.timestamps_humidity,
-                            measurements.values_humidity,
-                            measurements.regeneration_timestamps
-                        )
-                    except ValueError:
-                        print(f"Error parsing CO2/temp/humidity data: {line}")
+                        # Update indicator LEDs if pin states changed
+                        plot_manager.update_sensor_indicators(measurements.pin_states)
+                    except Exception as e:
+                        print(f"Error parsing pin states: {e}, line: {line}")
+                        # Incrémenter le compteur d'erreurs Arduino (erreur de parsing)
+                        device_error_count['arduino'] += 1
+                
+                # Traiter les données CO2/temp/humidity uniquement si le mode est actif
+                elif line.startswith('@') and measure_co2 and measure_co2_temp_humidity_active:
+                    data = line[1:].split()
+                    if len(data) == 3:
+                        try:
+                            co2 = float(data[0])
+                            temperature = float(data[1])
+                            humidity = float(data[2])
+                            
+                            # Only initialize start_time when we actually get data to plot
+                            if measurements.start_time_co2_temp_humidity is None:
+                                measurements.start_time_co2_temp_humidity = current_time
+                            
+                            # Calculate timestamp
+                            timestamp = current_time - measurements.start_time_co2_temp_humidity - measurements.elapsed_time_co2_temp_humidity
+                            
+                            # Store data
+                            measurements.timestamps_co2.append(timestamp)
+                            measurements.values_co2.append(co2)
+                            measurements.timestamps_temp.append(timestamp)
+                            measurements.values_temp.append(temperature)
+                            measurements.timestamps_humidity.append(timestamp)
+                            measurements.values_humidity.append(humidity)
+                            
+                            # Update plot
+                            plot_manager.update_co2_temp_humidity_plot(
+                                measurements.timestamps_co2,
+                                measurements.values_co2,
+                                measurements.timestamps_temp,
+                                measurements.values_temp,
+                                measurements.timestamps_humidity,
+                                measurements.values_humidity,
+                                measurements.regeneration_timestamps
+                            )
+                        except ValueError:
+                            print(f"Error parsing CO2/temp/humidity data: {line}")
+                            # Incrémenter le compteur d'erreurs Arduino (erreur de parsing CO2/temp/humidity)
+                            device_error_count['arduino'] += 1
         
         # Handle conductance measurements
         if measure_conductance and measure_conductance_active:
-            conductance_data = measurements.read_conductance()
+            try:
+                # Synchroniser les références pour être sûr qu'ils partagent le même objet
+                measurements.keithley = keithley
+                
+                # Vérifier d'abord que le Keithley est toujours connecté
+                if keithley.device is None:
+                    # Éviter les messages répétés
+                    if not hasattr(add_keithley_device, 'disconnection_reported') or not add_keithley_device.disconnection_reported:
+                        print("Le Keithley n'est plus disponible")
+                        add_keithley_device.disconnection_reported = True
+                    
+                    device_error_count['keithley'] += 2
+                    keithley_connected = False
+                    
+                    # Mettre à jour l'interface
+                    plot_manager.update_add_device_buttons({'keithley': False})
+                    
+                    # Tenter une reconnexion automatique (nouvelle fonctionnalité)
+                    current_time = time.time()
+                    if scan_for_devices_interval > 0 and (current_time - last_device_scan_time) >= scan_for_devices_interval:
+                        print("Tentative de reconnexion automatique du Keithley...")
+                        last_device_scan_time = current_time
+                        add_keithley_device(None)
+                    
+                    # Mettre automatiquement en pause la mesure de conductance
+                    if measure_conductance_active:
+                        print("Mise en pause automatique de la mesure de conductance")
+                        
+                        # Sauvegarder immédiatement les données de conductance
+                        if measurements.timeList and len(measurements.timeList) > 0:
+                            print("Sauvegarde immédiate des données de conductance suite à la déconnexion...")
+                            try:
+                                # S'assurer que le fichier est initialisé
+                                if not conductance_file_initialized:
+                                    data_handler.initialize_file("conductance")
+                                    conductance_file_initialized = True
+                                
+                                # Sauvegarde
+                                data_handler.save_conductance_data(
+                                    measurements.timeList,
+                                    measurements.conductanceList,
+                                    measurements.resistanceList
+                                )
+                                print(f"✓ {len(measurements.timeList)} points de conductance sauvegardés")
+                            except Exception as e:
+                                print(f"Erreur lors de la sauvegarde des données de conductance: {e}")
+                        
+                        measure_conductance_active = False
+                        # Mettre à jour l'interface
+                        if 'conductance' in plot_manager.buttons:
+                            plot_manager.buttons['conductance'].ax.set_facecolor('darkred')
+                            plot_manager.buttons['conductance'].color = 'darkred'
+                            plot_manager.buttons['conductance'].label.set_color('white')
+                            plot_manager.fig.canvas.draw_idle()
+                    
+                    # Sauvegarde d'urgence seulement si pas de sauvegarde récente
+                    current_time = time.time()
+                    if (not hasattr(perform_emergency_backup, 'last_emergency_time') or 
+                        current_time - perform_emergency_backup.last_emergency_time >= 60):
+                        perform_emergency_backup("Déconnexion Keithley détectée")
+                        # Mettre à jour le timestamp pour éviter les sauvegardes en rafale
+                        perform_emergency_backup.last_emergency_time = current_time
+                        
+                    conductance_data = None
+                else:
+                    try:
+                        conductance_data = measurements.read_conductance()
+                        if conductance_data:
+                            # Si la lecture réussit, réduire le compteur d'erreurs (mais pas en dessous de 0)
+                            device_error_count['keithley'] = max(0, device_error_count['keithley'] - 1)
+                    except pyvisa.errors.VisaIOError as visa_err:
+                        print(f"Erreur critique VISA avec le Keithley: {visa_err}")
+                        device_error_count['keithley'] += 2
+                        # Tentative de fermeture et réinitialisation de l'appareil
+                        try:
+                            if keithley.device:
+                                keithley.device.close()
+                        except:
+                            pass  # Ignorer les erreurs lors de la fermeture
+                        keithley.device = None
+                        keithley_connected = False
+                        # Mettre à jour l'interface
+                        plot_manager.update_add_device_buttons({'keithley': False})
+                        
+                        # Tenter une reconnexion automatique (nouvelle fonctionnalité)
+                        current_time = time.time()
+                        if scan_for_devices_interval > 0 and (current_time - last_device_scan_time) >= scan_for_devices_interval:
+                            print("Tentative de reconnexion automatique du Keithley...")
+                            last_device_scan_time = current_time
+                            add_keithley_device(None)
+                        
+                        # Mettre automatiquement en pause la mesure de conductance
+                        if measure_conductance_active:
+                            print("Mise en pause automatique de la mesure de conductance")
+                            
+                            # Sauvegarder immédiatement les données de conductance
+                            if measurements.timeList and len(measurements.timeList) > 0:
+                                print("Sauvegarde immédiate des données de conductance suite à la déconnexion...")
+                                try:
+                                    # S'assurer que le fichier est initialisé
+                                    if not conductance_file_initialized:
+                                        data_handler.initialize_file("conductance")
+                                        conductance_file_initialized = True
+                                    
+                                    # Sauvegarde
+                                    data_handler.save_conductance_data(
+                                        measurements.timeList,
+                                        measurements.conductanceList,
+                                        measurements.resistanceList
+                                    )
+                                    print(f"✓ {len(measurements.timeList)} points de conductance sauvegardés")
+                                except Exception as e:
+                                    print(f"Erreur lors de la sauvegarde des données de conductance: {e}")
+                            
+                            measure_conductance_active = False
+                            # Mettre à jour l'interface
+                            if 'conductance' in plot_manager.buttons:
+                                plot_manager.buttons['conductance'].ax.set_facecolor('darkred')
+                                plot_manager.buttons['conductance'].color = 'darkred'
+                                plot_manager.buttons['conductance'].label.set_color('white')
+                                plot_manager.fig.canvas.draw_idle()
+                        
+                        # Sauvegarde d'urgence seulement si pas de sauvegarde récente
+                        current_time = time.time()
+                        if (not hasattr(perform_emergency_backup, 'last_emergency_time') or 
+                            current_time - perform_emergency_backup.last_emergency_time >= 60):
+                            perform_emergency_backup("Déconnexion Keithley détectée")
+                            # Mettre à jour le timestamp pour éviter les sauvegardes en rafale
+                            perform_emergency_backup.last_emergency_time = current_time
+                            
+                        conductance_data = None
+                    except Exception as e:
+                        print(f"Error reading conductance data: {e}")
+                        device_error_count['keithley'] += 1
+                        conductance_data = None
+            except Exception as e:
+                print(f"Erreur générale lors de l'accès au Keithley: {e}")
+                device_error_count['keithley'] += 1
+                conductance_data = None
+                
             if conductance_data:
                 # Detect increase and stabilization
                 measurements.detect_increase()
@@ -799,6 +1723,9 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                 # Vérifier si les indicateurs doivent être réinitialisés (conductance < 5 µS)
                 indicators_reset = measurements.check_reset_detection_indicators()
                 
+                # Détecter la restabilisation post-régénération si nécessaire
+                measurements.detect_post_regen_stability()
+                
                 # Update plots and indicators
                 plot_manager.update_conductance_plot(
                     measurements.timeList,
@@ -806,7 +1733,9 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                     {
                         'increase_time': measurements.increase_time,
                         'stabilization_time': measurements.stabilization_time,
-                        'max_slope_time': measurements.max_slope_time
+                        'max_slope_time': measurements.max_slope_time,
+                        'conductance_decrease_time': measurements.conductance_decrease_time,
+                        'post_regen_stability_time': measurements.post_regen_stability_time
                     }
                 )
                 
@@ -817,7 +1746,143 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         
         # Handle resistance temperature measurements
         if measure_regen and measure_res_temp_active:
-            temp_data = measurements.read_res_temp()
+            try:
+                # Vérifier d'abord que l'appareil de régénération est toujours connecté
+                if regen.device is None or not hasattr(regen.device, 'write') or not hasattr(regen.device, 'is_open') or not regen.device.is_open:
+                    # Éviter les messages répétés
+                    if not hasattr(add_regen_device, 'disconnection_reported') or not add_regen_device.disconnection_reported:
+                        print("L'appareil de régénération n'est plus disponible")
+                        add_regen_device.disconnection_reported = True
+                    
+                    device_error_count['regen'] += 2
+                    regen_connected = False
+                    
+                    # Mettre à jour l'interface
+                    plot_manager.update_add_device_buttons({'regen': False})
+                    
+                    # Mettre automatiquement en pause la mesure de température/résistance
+                    if measure_res_temp_active:
+                        print("Mise en pause automatique de la mesure de température/résistance")
+                        
+                        # Sauvegarder immédiatement les données de température/résistance
+                        if measurements.timestamps_res_temp and len(measurements.timestamps_res_temp) > 0:
+                            print("Sauvegarde immédiate des données de température/résistance suite à la déconnexion...")
+                            try:
+                                # S'assurer que le fichier est initialisé
+                                if not temp_res_file_initialized:
+                                    data_handler.initialize_file("temp_res")
+                                    temp_res_file_initialized = True
+                                
+                                # Sauvegarde
+                                data_handler.save_temp_res_data(
+                                    measurements.timestamps_res_temp,
+                                    measurements.temperatures,
+                                    measurements.Tcons_values
+                                )
+                                print(f"✓ {len(measurements.timestamps_res_temp)} points de température/résistance sauvegardés")
+                            except Exception as e:
+                                print(f"Erreur lors de la sauvegarde des données de température/résistance: {e}")
+                        
+                        measure_res_temp_active = False
+                        # Mettre à jour l'interface
+                        if 'res_temp' in plot_manager.buttons:
+                            plot_manager.buttons['res_temp'].ax.set_facecolor('darkred')
+                            plot_manager.buttons['res_temp'].color = 'darkred'
+                            plot_manager.buttons['res_temp'].label.set_color('white')
+                            plot_manager.fig.canvas.draw_idle()
+                    
+                    # Sauvegarde d'urgence seulement si pas de sauvegarde récente
+                    current_time = time.time()
+                    if (not hasattr(perform_emergency_backup, 'last_emergency_time') or 
+                        current_time - perform_emergency_backup.last_emergency_time >= 60):
+                        perform_emergency_backup("Déconnexion carte de régénération détectée")
+                        # Mettre à jour le timestamp pour éviter les sauvegardes en rafale
+                        perform_emergency_backup.last_emergency_time = current_time
+                    
+                    temp_data = None
+                    
+                    # Tenter une reconnexion automatique (nouvelle fonctionnalité)
+                    if scan_for_devices_interval > 0 and (current_time - last_device_scan_time) >= scan_for_devices_interval:
+                        print("Tentative de reconnexion automatique de la carte de régénération...")
+                        last_device_scan_time = current_time
+                        
+                        # Appeler directement - maintenant que nous savons ce qui cause le problème, 
+                        # nous pouvons éviter le threading qui peut causer des problèmes
+                        add_regen_device(None)
+                else:
+                    try:
+                        temp_data = measurements.read_res_temp()
+                        if temp_data:
+                            # Si la lecture réussit, réduire le compteur d'erreurs (mais pas en dessous de 0)
+                            device_error_count['regen'] = max(0, device_error_count['regen'] - 1)
+                    except (serial.SerialException, IOError, OSError, PermissionError) as serial_err:
+                        # Éviter les messages répétés
+                        if not hasattr(add_regen_device, 'error_reported') or not add_regen_device.error_reported:
+                            print(f"Erreur critique sur le port série de régénération: {serial_err}")
+                            add_regen_device.error_reported = True
+                            
+                        device_error_count['regen'] += 2
+                        # Tentative de fermeture et réinitialisation de l'appareil
+                        try:
+                            if regen.device:
+                                if hasattr(regen.device, 'is_open') and regen.device.is_open:
+                                    regen.device.close()
+                        except:
+                            pass  # Ignorer les erreurs lors de la fermeture
+                        regen.device = None
+                        regen_connected = False
+                        # Mettre à jour l'interface
+                        plot_manager.update_add_device_buttons({'regen': False})
+                        
+                        # Mettre automatiquement en pause la mesure de température/résistance
+                        if measure_res_temp_active:
+                            print("Mise en pause automatique de la mesure de température/résistance")
+                            
+                            # Sauvegarder immédiatement les données de température/résistance
+                            if measurements.timestamps_res_temp and len(measurements.timestamps_res_temp) > 0:
+                                print("Sauvegarde immédiate des données de température/résistance suite à la déconnexion...")
+                                try:
+                                    # S'assurer que le fichier est initialisé
+                                    if not temp_res_file_initialized:
+                                        data_handler.initialize_file("temp_res")
+                                        temp_res_file_initialized = True
+                                    
+                                    # Sauvegarde
+                                    data_handler.save_temp_res_data(
+                                        measurements.timestamps_res_temp,
+                                        measurements.temperatures,
+                                        measurements.Tcons_values
+                                    )
+                                    print(f"✓ {len(measurements.timestamps_res_temp)} points de température/résistance sauvegardés")
+                                except Exception as e:
+                                    print(f"Erreur lors de la sauvegarde des données de température/résistance: {e}")
+                            
+                            measure_res_temp_active = False
+                            # Mettre à jour l'interface
+                            if 'res_temp' in plot_manager.buttons:
+                                plot_manager.buttons['res_temp'].ax.set_facecolor('darkred')
+                                plot_manager.buttons['res_temp'].color = 'darkred'
+                                plot_manager.buttons['res_temp'].label.set_color('white')
+                                plot_manager.fig.canvas.draw_idle()
+                        
+                        # Sauvegarde d'urgence seulement si pas de sauvegarde récente
+                        current_time = time.time()
+                        if (not hasattr(perform_emergency_backup, 'last_emergency_time') or 
+                            current_time - perform_emergency_backup.last_emergency_time >= 60):
+                            perform_emergency_backup("Déconnexion carte de régénération détectée")
+                            # Mettre à jour le timestamp pour éviter les sauvegardes en rafale
+                            perform_emergency_backup.last_emergency_time = current_time
+                        
+                        temp_data = None
+                    except Exception as e:
+                        print(f"Error reading temperature/resistance data: {e}")
+                        device_error_count['regen'] += 1
+                        temp_data = None
+            except Exception as e:
+                print(f"Erreur générale lors de l'accès à la carte de régénération: {e}")
+                device_error_count['regen'] += 1
+                temp_data = None
+                
             if temp_data:
                 plot_manager.update_res_temp_plot(
                     measurements.timestamps_res_temp,
@@ -828,8 +1893,99 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         
         # Handle regeneration protocol
         if measurements.regeneration_in_progress:
-            regeneration_status = measurements.manage_regeneration_protocol()
-            plot_manager.update_regeneration_status(regeneration_status, measurements.regeneration_results)
+            try:
+                regeneration_status = measurements.manage_regeneration_protocol()
+                plot_manager.update_regeneration_status(regeneration_status, measurements.regeneration_results)
+            except Exception as e:
+                print(f"Error managing regeneration protocol: {e}")
+                # Incrémenter les compteurs d'erreurs des deux appareils impliqués dans la régénération
+                device_error_count['regen'] += 1
+                device_error_count['arduino'] += 1
+                
+        # Handle conductance regeneration protocol
+        if measurements.conductance_regen_in_progress:
+            try:
+                conductance_regen_status = measurements.manage_conductance_regen_protocol()
+                plot_manager.update_regeneration_status(conductance_regen_status)
+                
+                # Réactiver le bouton de protocole si terminé
+                if not conductance_regen_status['active']:
+                    if 'conductance_regen' in plot_manager.buttons:
+                        regeneration_button = plot_manager.buttons['conductance_regen']
+                        regeneration_button.ax.set_facecolor('darkblue')
+                        regeneration_button.color = 'darkblue'
+                        regeneration_button.label.set_color('white')
+                        regeneration_button.active = True
+                        
+                # Afficher le bouton d'annulation pendant le protocole
+                if conductance_regen_status['active'] and 'cancel_regeneration' in plot_manager.buttons:
+                    cancel_button = plot_manager.buttons['cancel_regeneration']
+                    if not cancel_button.ax.get_visible():
+                        cancel_button.ax.set_visible(True)
+                        cancel_button.active = True
+                        cancel_button.ax.figure.canvas.draw_idle()
+            except Exception as e:
+                print(f"Error managing conductance regeneration protocol: {e}")
+                # Incrémenter les compteurs d'erreurs des deux appareils impliqués
+                device_error_count['regen'] += 1
+                device_error_count['keithley'] += 1
+            
+        # Vérifier si des erreurs d'appareils ont été détectées ou si l'intervalle de sauvegarde automatique est écoulé
+        current_time = time.time()
+        should_backup = False
+        backup_reason = "sauvegarde périodique"
+        
+        # Limiter la fréquence des sauvegardes d'urgence pour éviter le flood
+        min_time_between_emergency_backups = 60  # 60 secondes minimum entre deux sauvegardes d'urgence
+        
+        # Vérifier les erreurs d'appareils avec la nouvelle fonction de vérification
+        error_info = check_device_errors()
+        
+        # Désactiver le mode d'urgence si les compteurs d'erreur sont bas 
+        # et qu'au moins un appareil est connecté
+        if emergency_mode and sum(device_error_count.values()) < 2 and (arduino_connected or regen_connected or keithley_connected):
+            print("Mode d'urgence désactivé - connexion des appareils stabilisée")
+            emergency_mode = False
+        
+        # Adapter l'intervalle de sauvegarde au mode d'urgence
+        effective_interval = backup_interval / 2 if emergency_mode else backup_interval
+        
+        # Variables pour suivre la dernière sauvegarde d'urgence
+        if not hasattr(perform_emergency_backup, 'last_emergency_time'):
+            perform_emergency_backup.last_emergency_time = 0
+            
+        # Vérifier le temps écoulé depuis la dernière sauvegarde d'urgence
+        time_since_last_emergency = current_time - perform_emergency_backup.last_emergency_time
+        
+        if error_info['critical'] and time_since_last_emergency >= min_time_between_emergency_backups:
+            backup_reason = error_info['message']
+            should_backup = True
+            # Mettre à jour le timestamp de la dernière sauvegarde d'urgence
+            perform_emergency_backup.last_emergency_time = current_time
+            # Réinitialiser partiellement les compteurs d'erreurs après la sauvegarde
+            # Ne pas les remettre complètement à zéro pour maintenir une certaine "mémoire" des problèmes
+            device_error_count = {k: max(0, v - 2) for k, v in device_error_count.items()}
+        
+        # Sauvegarde périodique (seulement si des mesures sont actives)
+        elif current_time - last_backup_time > effective_interval and (measure_conductance_active or measure_co2_temp_humidity_active or measure_res_temp_active):
+            time_since_last = int(current_time - last_backup_time)
+            backup_reason = f"sauvegarde automatique après {time_since_last} secondes"
+            should_backup = True
+            last_backup_time = current_time
+        
+        # Effectuer la sauvegarde si nécessaire
+        if should_backup:
+            backup_successful = perform_emergency_backup(backup_reason)
+            
+            # Mettre à jour l'indicateur de sauvegarde dans l'interface
+            if hasattr(plot_manager, 'update_backup_status'):
+                plot_manager.update_backup_status(last_backup_status)
+            
+            # Montrer une notification à l'utilisateur si nous sommes en mode d'urgence 
+            # ou si c'est une sauvegarde périodique réussie (mais moins fréquemment)
+            if backup_successful and (emergency_mode or (current_time - last_notification_time > 300)):  # 5 minutes minimum entre notifs périodiques
+                # Cette fonction vérifie elle-même si la période de refroidissement est respectée
+                show_backup_notification(backup_reason)
             
         # Update UI - délai court pour une meilleure réactivité tout en donnant une chance au ramasse-miettes Python de libérer la mémoire
         plt.pause(0.01)

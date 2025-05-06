@@ -462,13 +462,22 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                 conductance_data = measurements.read_conductance()
                 if conductance_data:
                     last_conductance_time = current_time
+                    
+                    # Détecter les éléments du cycle de conductance
+                    measurements.detect_increase()
+                    measurements.detect_stabilization()
+                    measurements.check_reset_detection_indicators()
+                    measurements.detect_post_regen_stability()
+                    
                     plot_manager.update_conductance_plot(
                         measurements.timeList,
                         measurements.conductanceList,
                         {
                             'increase_time': measurements.increase_time,
                             'stabilization_time': measurements.stabilization_time,
-                            'max_slope_time': measurements.max_slope_time
+                            'max_slope_time': measurements.max_slope_time,
+                            'conductance_decrease_time': measurements.conductance_decrease_time,
+                            'post_regen_stability_time': measurements.post_regen_stability_time
                         }
                     )
             
