@@ -735,8 +735,15 @@ class MeasurementManager:
             self.increase_detected = True
             self.max_slope_value = slope
             self.max_slope_time = self.timeList[-1]
-            self.increase_time = self.timeList[-1]
-            print(f"Time {self.timeList[-1]/60:.1f} min: Increase detected! Slope = {slope:.2f} µS/s")
+            
+            # Update increase_time only if it's not already set
+            # Pour garder T perco de la première détection et ne pas le réinitialiser
+            if self.increase_time is None:
+                self.increase_time = self.timeList[-1]
+                print(f"Time {self.timeList[-1]/60:.1f} min: Increase detected! Slope = {slope:.2f} µS/s")
+            else:
+                print(f"Time {self.timeList[-1]/60:.1f} min: Increase detected again! Slope = {slope:.2f} µS/s (T perco preserved: {self.increase_time/60:.1f} min)")
+            
             return True
         
         return False
@@ -825,7 +832,7 @@ class MeasurementManager:
     def check_reset_detection_indicators(self):
         """
         Vérifie si la conductance est descendue sous 5 µS après stabilisation
-        et réinitialise les indicateurs le cas échéant
+        et réinitialise les indicateurs de détection (mais pas le temps de percolation)
         
         Returns: True si les indicateurs ont été réinitialisés, False sinon
         """
@@ -842,10 +849,12 @@ class MeasurementManager:
                 self.conductance_decrease_time = self.timeList[-1]
                 print(f"Temps {self.timeList[-1]/60:.1f} min: Décroissance détectée - Conductance sous 5 µS ({current_conductance:.2f} µS)")
             
-            # Réinitialise les indicateurs de détection
+            # Réinitialise seulement les indicateurs de détection, pas le temps de percolation
+            old_increase_time = self.increase_time  # Mémoriser le temps de percolation actuel
             self.increase_detected = False
             self.stabilized = False
-            print(f"Conductance redescendue à {current_conductance:.2f} µS - Indicateurs réinitialisés")
+            # Ne pas réinitialiser le temps de percolation: self.increase_time reste inchangé
+            print(f"Conductance redescendue à {current_conductance:.2f} µS - Indicateurs réinitialisés (T perco conservé)")
             return True
             
         return False

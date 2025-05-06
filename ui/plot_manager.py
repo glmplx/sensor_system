@@ -204,6 +204,20 @@ class PlotManager:
         # Position X juste après le bouton Start/Stop Res/Temp (0.26 + button_width)
         protocol_x = 0.38
         
+        # Créer une barre de progression pour les protocoles
+        protocol_progress_y = protocol_y + button_height + 0.01  # Juste au-dessus des boutons
+        protocol_progress_width = protocol_button_width * 2.25 + 0.03  # Largeur pour couvrir les deux boutons
+        ax_protocol_progress = plt.axes([protocol_x, protocol_progress_y, protocol_progress_width, 0.01])
+        ax_protocol_progress.set_xticks([])
+        ax_protocol_progress.set_yticks([])
+        ax_protocol_progress.set_frame_on(True)  # Afficher le cadre
+        ax_protocol_progress.patch.set_alpha(0.2)  # Rendre semi-transparent pour voir le cadre
+        ax_protocol_progress.set_xlabel('')
+        ax_protocol_progress.set_title('Progression', fontsize=8, pad=2)
+        ax_protocol_progress.text(0.5, 0.5, '0%', ha='center', va='center', transform=ax_protocol_progress.transAxes, fontsize=7)
+        ax_protocol_progress.set_visible(False)  # Initialement invisible
+        self.indicators['protocol_progress'] = ax_protocol_progress
+        
         # Bouton Protocole CO2
         ax_button_regeneration = plt.axes([protocol_x, protocol_y, protocol_button_width, button_height])
         regeneration_button = Button(ax_button_regeneration, 'Protocole CO2', color='firebrick')
@@ -217,15 +231,15 @@ class PlotManager:
         protocol_button_width2 = protocol_button_width * 1.4  # Encore plus large pour le texte plus long
         ax_button_cond_regen = plt.axes([protocol_x2, protocol_y, protocol_button_width2, button_height])
         cond_regen_button = Button(ax_button_cond_regen, 'Protocole Conductance', color='darkblue')
-        # Initialement désactivé (grisé) - sera activé dynamiquement quand les conditions seront remplies
-        cond_regen_button.ax.set_facecolor('lightgray')
-        cond_regen_button.color = 'lightgray'
-        cond_regen_button.label.set_color('black')
-        cond_regen_button.active = False  # Désactivé par défaut
+        # Activé dès le départ
+        cond_regen_button.ax.set_facecolor('darkblue')
+        cond_regen_button.color = 'darkblue'
+        cond_regen_button.label.set_color('white')
+        cond_regen_button.active = True  # Activé par défaut
         self.buttons['conductance_regen'] = cond_regen_button
         
-        # Bouton d'annulation de régénération (initialement caché) - au-dessus des boutons protocole
-        ax_button_cancel_regen = plt.axes([protocol_x + protocol_button_width/2, protocol_y + spacing, button_width * 0.7, button_height])
+        # Bouton d'annulation de régénération (initialement caché) - à droite du bouton protocole conductance
+        ax_button_cancel_regen = plt.axes([protocol_x2 + protocol_button_width2 + 0.03, protocol_y, button_width * 0.7, button_height])
         cancel_regen_button = Button(ax_button_cancel_regen, 'Cancel', color='orange')
         cancel_regen_button.ax.set_facecolor('orange')
         cancel_regen_button.color = 'orange'
@@ -284,15 +298,15 @@ class PlotManager:
         protocol_button_width2 = protocol_button_width * 1.4  # Encore plus large pour le texte plus long
         ax_button_cond_regen = plt.axes([protocol_x2, protocol_y, protocol_button_width2, button_height])
         cond_regen_button = Button(ax_button_cond_regen, 'Protocole Conductance', color='darkblue')
-        # Initialement désactivé (grisé) - sera activé dynamiquement quand les conditions seront remplies
-        cond_regen_button.ax.set_facecolor('lightgray')
-        cond_regen_button.color = 'lightgray'
-        cond_regen_button.label.set_color('black')
-        cond_regen_button.active = False  # Désactivé par défaut
+        # Activé dès le départ
+        cond_regen_button.ax.set_facecolor('darkblue')
+        cond_regen_button.color = 'darkblue'
+        cond_regen_button.label.set_color('white')
+        cond_regen_button.active = True  # Activé par défaut
         self.buttons['conductance_regen'] = cond_regen_button
         
-        # Bouton d'annulation de régénération (initialement caché) - au-dessus des boutons protocole
-        ax_button_cancel_regen = plt.axes([protocol_x + protocol_button_width/2, protocol_y + spacing, button_width * 0.7, button_height])
+        # Bouton d'annulation de régénération (initialement caché) - à droite du bouton protocole conductance
+        ax_button_cancel_regen = plt.axes([protocol_x2 + protocol_button_width2 + 0.03, protocol_y, button_width * 0.7, button_height])
         cancel_regen_button = Button(ax_button_cancel_regen, 'Cancel', color='orange')
         cancel_regen_button.ax.set_facecolor('orange')
         cancel_regen_button.color = 'orange'
@@ -1028,20 +1042,20 @@ class PlotManager:
         if active_axes:
             # Calculer la hauteur de chaque panneau (en tenant compte des marges)
             n_active = len(active_axes)
-            if n_active < 3:
-                # Recalculer les positions de chaque axe visible
-                height_per_panel = 0.75 / n_active
-                bottom_margin = 0.15  # Marge inférieure
+            
+            # Recalculer les positions de chaque axe visible (pour tout nombre de panneaux)
+            height_per_panel = 0.75 / n_active
+            bottom_margin = 0.15  # Marge inférieure
+            
+            for i, ax in enumerate(active_axes):
+                # Position y (de bas en haut)
+                bottom = bottom_margin + (n_active - i - 1) * height_per_panel
+                # Définir la nouvelle position [left, bottom, width, height]
+                ax.set_position([0.1, bottom, 0.8, height_per_panel * 0.95])
                 
-                for i, ax in enumerate(active_axes):
-                    # Position y (de bas en haut)
-                    bottom = bottom_margin + (n_active - i - 1) * height_per_panel
-                    # Définir la nouvelle position [left, bottom, width, height]
-                    ax.set_position([0.1, bottom, 0.8, height_per_panel * 0.95])
-                    
-                    # Si c'est un axe CO2, ajuster aussi l'axe droit
-                    if ax == self.axes.get('co2') and 'co2_right' in self.axes:
-                        self.axes['co2_right'].set_position([0.1, bottom, 0.8, height_per_panel * 0.95])
+                # Si c'est un axe CO2, ajuster aussi l'axe droit
+                if ax == self.axes.get('co2') and 'co2_right' in self.axes:
+                    self.axes['co2_right'].set_position([0.1, bottom, 0.8, height_per_panel * 0.95])
         
         # Cacher les boutons pour les panneaux masqués et les fonctionnalités non disponibles
         for button_name, button in self.buttons.items():
@@ -1226,6 +1240,91 @@ class PlotManager:
                 callback(event)
             
             self.add_device_buttons[device_type].on_clicked(wrapped_callback)
+            
+    def update_protocol_button_states(self, measure_co2_temp_humidity_active, measure_conductance_active, measure_res_temp_active):
+        """
+        Update the protocol buttons state based on active measurements
+        - CO2 protocol button should be clickable if CO2 and Tcons/Tmes are active
+        - Conductance protocol button should be clickable if Conductance and Tcons/Tmes are active
+        
+        Args:
+            measure_co2_temp_humidity_active: Whether CO2/temperature/humidity measurement is active
+            measure_conductance_active: Whether conductance measurement is active
+            measure_res_temp_active: Whether resistance/temperature measurement is active
+        """
+        # Protocole CO2 button - clickable if CO2 and Temp active
+        if measure_co2_temp_humidity_active and measure_res_temp_active:
+            # Enable CO2 protocol button
+            self.buttons['regeneration'].ax.set_facecolor('firebrick')
+            self.buttons['regeneration'].color = 'firebrick'
+            self.buttons['regeneration'].label.set_color('white')
+            self.buttons['regeneration'].active = True
+        else:
+            # Disable CO2 protocol button
+            self.buttons['regeneration'].ax.set_facecolor('lightgray')
+            self.buttons['regeneration'].color = 'lightgray'
+            self.buttons['regeneration'].label.set_color('darkgray')
+            self.buttons['regeneration'].active = False
+        
+        # Protocole Conductance button - clickable if Conductance and Temp active
+        if measure_conductance_active and measure_res_temp_active:
+            # Enable Conductance protocol button
+            self.buttons['conductance_regen'].ax.set_facecolor('darkblue')
+            self.buttons['conductance_regen'].color = 'darkblue'
+            self.buttons['conductance_regen'].label.set_color('white')
+            self.buttons['conductance_regen'].active = True
+        else:
+            # Disable Conductance protocol button
+            self.buttons['conductance_regen'].ax.set_facecolor('lightgray')
+            self.buttons['conductance_regen'].color = 'lightgray'
+            self.buttons['conductance_regen'].label.set_color('darkgray')
+            self.buttons['conductance_regen'].active = False
+            
+        # Redraw the buttons
+        self.fig.canvas.draw_idle()
+        
+    def update_regeneration_status(self, status_info, regeneration_results=None):
+        """
+        Mets à jour l'affichage du statut de régénération/protocole
+        
+        Args:
+            status_info: Dict contenant les informations de statut
+                'active': Bool - Si le protocole est actif
+                'step': Int - Étape courante du protocole
+                'message': Str - Message à afficher
+                'progress': Float - Progression (0-100)
+        """
+        # Mettre à jour l'état de la barre de progression commune
+        if 'protocol_progress' in self.indicators:
+            ax_progress = self.indicators['protocol_progress']
+            progress = status_info.get('progress', 0)
+            message = status_info.get('message', '')
+            
+            if status_info.get('active', False):
+                # Afficher la barre de progression
+                ax_progress.set_visible(True)
+                
+                # Mettre à jour la barre de progrès
+                ax_progress.clear()
+                ax_progress.barh(0, progress, color='green', height=0.8)
+                ax_progress.set_xlim(0, 100)
+                ax_progress.set_ylim(-0.5, 0.5)
+                ax_progress.text(50, 0, f"{progress:.0f}%", ha='center', va='center', fontsize=8, color='black')
+                
+                # Ajouter un titre qui indique le type de protocole en cours
+                protocol_type = "CO2" if "regeneration" in message.lower() else "Conductance"
+                ax_progress.set_title(f"Protocole {protocol_type} : {message}", fontsize=8, pad=2)
+                
+                # Enlever les axes
+                ax_progress.set_xticks([])
+                ax_progress.set_yticks([])
+                ax_progress.set_frame_on(True)
+            else:
+                # Cacher la barre de progression si le protocole est désactivé
+                ax_progress.set_visible(False)
+            
+            # Actualiser la barre de progression
+            ax_progress.figure.canvas.draw_idle()
     
     def set_close_callback(self, callback):
         """

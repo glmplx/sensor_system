@@ -256,7 +256,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
     
     # Variables pour la sauvegarde de secours
     last_backup_time = time.time()
-    backup_interval = 120  # Sauvegarde automatique toutes les 2 minutes (en secondes)
+    backup_interval = 500  # Sauvegarde automatique toutes les 500 secondes (environ 8 minutes)
     last_notification_time = time.time()  # Pour limiter les notifications
     notification_cooldown = 30  # 30 secondes entre les notifications
     emergency_mode = False  # Indique si on est en mode d'urgence
@@ -309,14 +309,18 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
     if hasattr(plot_manager, 'update_backup_status'):
         plot_manager.update_backup_status(last_backup_status)
     
-    # Désactiver le bouton de régénération initialement - sera activé uniquement quand
-    # les mesures CO2 et Tcons/Tmes seront activées simultanément
-    if 'regeneration' in plot_manager.buttons:
-        regeneration_button = plot_manager.buttons['regeneration']
-        regeneration_button.ax.set_facecolor('lightgray')
-        regeneration_button.color = 'lightgray'
-        regeneration_button.label.set_color('black')
-        regeneration_button.active = False
+    # Initialiser correctement les états des boutons de protocole basés sur les mesures actives
+    plot_manager.update_protocol_button_states(
+        measure_co2_temp_humidity_active, 
+        measure_conductance_active, 
+        measure_res_temp_active
+    )
+    
+    # S'assurer que le bouton d'annulation de protocole est caché au démarrage
+    if 'cancel_regeneration' in plot_manager.buttons:
+        cancel_button = plot_manager.buttons['cancel_regeneration']
+        cancel_button.ax.set_visible(False)
+        cancel_button.active = False
     
     # Initialize R0 display
     R0 = measurements.read_R0()
@@ -351,6 +355,13 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
             measurements.elapsed_time_conductance += pause_duration
         
         plot_manager.update_raz_buttons_visibility({'conductance': measure_conductance_active})
+        
+        # Update protocol button states based on active measurements
+        plot_manager.update_protocol_button_states(
+            measure_co2_temp_humidity_active,
+            measure_conductance_active,
+            measure_res_temp_active
+        )
     
     def toggle_co2_temp_humidity(event):
         nonlocal measure_co2_temp_humidity_active, co2_temp_humidity_file_initialized
@@ -384,7 +395,13 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
             measurements.elapsed_time_co2_temp_humidity += pause_duration
         
         plot_manager.update_raz_buttons_visibility({'co2_temp_humidity': measure_co2_temp_humidity_active})
-        update_regeneration_button_state()
+        
+        # Update protocol button states based on active measurements
+        plot_manager.update_protocol_button_states(
+            measure_co2_temp_humidity_active,
+            measure_conductance_active,
+            measure_res_temp_active
+        )
     
     def toggle_res_temp(event):
         nonlocal measure_res_temp_active, temp_res_file_initialized
@@ -413,55 +430,22 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
             measurements.elapsed_time_res_temp += pause_duration
         
         plot_manager.update_raz_buttons_visibility({'res_temp': measure_res_temp_active})
-        update_regeneration_button_state()
+        
+        # Update protocol button states based on active measurements
+        plot_manager.update_protocol_button_states(
+            measure_co2_temp_humidity_active,
+            measure_conductance_active,
+            measure_res_temp_active
+        )
         
     def update_regeneration_button_state():
         """Met à jour l'état des boutons de protocole en fonction des mesures actives"""
-        # 1. Bouton de protocole CO2 - doit être actif si CO2 et Tcons/Tmes sont actifs
-        if 'regeneration' in plot_manager.buttons:
-            regeneration_button = plot_manager.buttons['regeneration']
-            
-            # Si les deux mesures sont actives et qu'on n'est pas déjà en régénération
-            if measure_co2_temp_humidity_active and measure_res_temp_active and not measurements.regeneration_in_progress:
-                # Activer le bouton
-                regeneration_button.ax.set_facecolor('firebrick')
-                regeneration_button.color = 'firebrick'
-                regeneration_button.label.set_color('white')
-                regeneration_button.active = True
-            else:
-                # Désactiver le bouton si les conditions ne sont pas réunies 
-                # et qu'on n'est pas déjà en régénération
-                if not measurements.regeneration_in_progress:
-                    regeneration_button.ax.set_facecolor('lightgray')
-                    regeneration_button.color = 'lightgray'
-                    regeneration_button.label.set_color('black')
-                    regeneration_button.active = False
-            
-            # Forcer la mise à jour du canvas
-            regeneration_button.ax.figure.canvas.draw_idle()
-            
-        # 2. Bouton de protocole conductance - doit être actif si conductance et Tcons/Tmes sont actifs
-        if 'conductance_regen' in plot_manager.buttons:
-            cond_regen_button = plot_manager.buttons['conductance_regen']
-            
-            # Si les deux mesures nécessaires sont actives et qu'on n'est pas déjà en protocole conductance
-            if measure_conductance_active and measure_res_temp_active and not measurements.conductance_regen_in_progress:
-                # Activer le bouton
-                cond_regen_button.ax.set_facecolor('darkblue')
-                cond_regen_button.color = 'darkblue'
-                cond_regen_button.label.set_color('white')
-                cond_regen_button.active = True
-            else:
-                # Désactiver le bouton si les conditions ne sont pas réunies
-                # et qu'on n'est pas déjà en protocole conductance
-                if not measurements.conductance_regen_in_progress:
-                    cond_regen_button.ax.set_facecolor('lightgray')
-                    cond_regen_button.color = 'lightgray'
-                    cond_regen_button.label.set_color('black')
-                    cond_regen_button.active = False
-            
-            # Forcer la mise à jour du canvas
-            cond_regen_button.ax.figure.canvas.draw_idle()
+        # Use the new method to update protocol button states
+        plot_manager.update_protocol_button_states(
+            measure_co2_temp_humidity_active,
+            measure_conductance_active,
+            measure_res_temp_active
+        )
     
     def raz_conductance(event):
         # Préparer les données pour l'essai cumulé sans créer de nouvelle feuille
@@ -478,6 +462,18 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         
         plot_manager.update_conductance_plot([], [])
         plot_manager.update_detection_indicators(False, False)
+        
+        # Ne pas réinitialiser l'indicateur de temps de percolation lors d'un RAZ
+        # Si measurements.increase_time existe encore, afficher cette valeur, sinon afficher 0
+        if 'percolation_time_display' in plot_manager.indicators:
+            ax_percolation_time = plot_manager.indicators['percolation_time_display']
+            ax_percolation_time.clear()
+            # Utiliser la valeur de increase_time si elle existe, sinon afficher 0
+            perco_value = measurements.increase_time if measurements.increase_time is not None else 0
+            ax_percolation_time.text(0.5, 0.5, f"T perco: {perco_value:.1f} s", 
+                                   ha="center", va="center", transform=ax_percolation_time.transAxes)
+            ax_percolation_time.axis('off')
+            ax_percolation_time.figure.canvas.draw_idle()
     
     def raz_co2_temp_humidity(event):
         # Préparer les données pour l'essai cumulé
@@ -548,6 +544,11 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         """Handle regeneration button click"""
         # Only do something if button is active (not already in regeneration)
         if hasattr(plot_manager.buttons['regeneration'], 'active') and plot_manager.buttons['regeneration'].active:
+            # Check if conductance regen is in progress - don't allow both at the same time
+            if measurements.conductance_regen_in_progress:
+                print("Impossible de démarrer le protocole CO2 pendant que le protocole Conductance est actif")
+                return
+                
             # Start regeneration protocol
             success = measurements.start_regeneration_protocol()
             if success:
@@ -558,22 +559,64 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                     'message': "Starting regeneration protocol",
                     'progress': 0
                 })
+                
+                # Disable conductance regeneration button while this protocol is active
+                if 'conductance_regen' in plot_manager.buttons:
+                    conductance_regen_button = plot_manager.buttons['conductance_regen']
+                    conductance_regen_button.ax.set_facecolor('lightgray')
+                    conductance_regen_button.color = 'lightgray'
+                    conductance_regen_button.label.set_color('black')
+                    conductance_regen_button.active = False
+                    conductance_regen_button.ax.figure.canvas.draw_idle()
+                
+                # Mettre à jour l'état du bouton regeneration (CO2)
+                regeneration_button = plot_manager.buttons['regeneration']
+                regeneration_button.ax.set_facecolor('lightgray')
+                regeneration_button.color = 'lightgray'
+                regeneration_button.label.set_color('black')
+                regeneration_button.active = False
                 # Button will be reactivated when regeneration completes
     
     def cancel_regeneration(event):
         """Handle regeneration cancel button click"""
         # Only do something if button is active and visible
         if hasattr(plot_manager.buttons['cancel_regeneration'], 'active') and plot_manager.buttons['cancel_regeneration'].active:
-            # Cancel regeneration protocol
-            success = measurements.cancel_regeneration_protocol()
-            if success:
-                # Update button state
-                plot_manager.update_regeneration_status({
-                    'active': False,
-                    'step': 0,
-                    'message': "Regeneration cancelled",
-                    'progress': 0
-                })
+            if measurements.regeneration_in_progress:
+                # Cancel CO2 regeneration protocol
+                success = measurements.cancel_regeneration_protocol()
+                if success:
+                    # Update button state
+                    plot_manager.update_regeneration_status({
+                        'active': False,
+                        'step': 0,
+                        'message': "Regeneration cancelled",
+                        'progress': 0
+                    })
+                    
+                    # Re-enable protocol buttons based on measurement conditions
+                    plot_manager.update_protocol_button_states(
+                        measure_co2_temp_humidity_active,
+                        measure_conductance_active,
+                        measure_res_temp_active
+                    )
+            elif measurements.conductance_regen_in_progress:
+                # Cancel conductance regeneration protocol
+                success = measurements.cancel_conductance_regen_protocol()
+                if success:
+                    # Update button state
+                    plot_manager.update_regeneration_status({
+                        'active': False,
+                        'step': 0,
+                        'message': "Conductance protocol cancelled",
+                        'progress': 0
+                    })
+                    
+                    # Re-enable protocol buttons based on measurement conditions
+                    plot_manager.update_protocol_button_states(
+                        measure_co2_temp_humidity_active,
+                        measure_conductance_active,
+                        measure_res_temp_active
+                    )
             
     def quit_program(event):
         nonlocal escape_pressed
@@ -751,8 +794,12 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         if measure_regen:
             toggle_res_temp(event)
             
-        # Mettre à jour l'état des boutons de protocole après avoir basculé toutes les mesures
-        update_regeneration_button_state()
+        # Update protocol button states based on active measurements
+        plot_manager.update_protocol_button_states(
+            measure_co2_temp_humidity_active,
+            measure_conductance_active,
+            measure_res_temp_active
+        )
             
     def perform_emergency_backup(reason="sauvegarde automatique"):
         """
@@ -789,15 +836,38 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
             else:
                 print(f"\n=== SAUVEGARDE D'URGENCE ({backup_time_str}) : {reason} ===")
             
+            # Pour les sauvegardes automatiques, on ne crée pas de nouvelles feuilles Excel
+            # sauf en cas d'urgence où on veut être sûr de ne pas perdre de données
+            is_auto_backup = "automatique" in reason and not emergency_mode
+            
+            # Variables pour garder trace de la dernière feuille si besoin
+            sheet_name_conductance = None
+            sheet_name_co2 = None
+            sheet_name_temp_res = None
+            
             # Sauvegarde des données de conductance si actives
             if measure_conductance_active and measurements.timeList and len(measurements.timeList) > 0:
                 try:
                     print(f"Sauvegarde des données de conductance...")
+                    
+                    # Vérifier si une feuille existe déjà pour ce fichier
+                    if is_auto_backup:
+                        # Pour les sauvegardes automatiques, utiliser "AutoSave" comme nom de feuille fixe
+                        # La fonction save_conductance_data va mettre à jour cette feuille si elle existe déjà
+                        sheet_name_conductance = "AutoSave"
+                    else:
+                        # En cas d'urgence, créer une nouvelle feuille avec un timestamp
+                        sheet_name_conductance = f"Cond_{datetime.now().strftime('%H%M%S')}"
+                    
+                    # On utilise toujours save_conductance_data, mais avec un nom de feuille spécifique 
+                    # pour les sauvegardes automatiques
                     data_handler.save_conductance_data(
                         measurements.timeList,
                         measurements.conductanceList,
-                        measurements.resistanceList
+                        measurements.resistanceList,
+                        sheet_name=sheet_name_conductance
                     )
+                    
                     print(f"✓ {len(measurements.timeList)} points de conductance sauvegardés")
                     data_saved = True
                 except Exception as e:
@@ -807,14 +877,24 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
             if measure_co2_temp_humidity_active and measurements.timestamps_co2 and len(measurements.timestamps_co2) > 0:
                 try:
                     print(f"Sauvegarde des données CO2/température/humidité...")
+                    
+                    if is_auto_backup:
+                        # Pour les sauvegardes automatiques, utiliser "AutoSave" comme nom de feuille fixe
+                        sheet_name_co2 = "AutoSave"
+                    else:
+                        # En cas d'urgence, créer une nouvelle feuille
+                        sheet_name_co2 = f"CO2_{datetime.now().strftime('%H%M%S')}"
+                    
                     data_handler.save_co2_temp_humidity_data(
                         measurements.timestamps_co2,
                         measurements.values_co2,
                         measurements.timestamps_temp,
                         measurements.values_temp,
                         measurements.timestamps_humidity,
-                        measurements.values_humidity
+                        measurements.values_humidity,
+                        sheet_name=sheet_name_co2
                     )
+                    
                     print(f"✓ {len(measurements.timestamps_co2)} points de CO2/T/H sauvegardés")
                     data_saved = True
                 except Exception as e:
@@ -824,11 +904,21 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
             if measure_res_temp_active and measurements.timestamps_res_temp and len(measurements.timestamps_res_temp) > 0:
                 try:
                     print(f"Sauvegarde des données de température/résistance...")
+                    
+                    if is_auto_backup:
+                        # Pour les sauvegardes automatiques, utiliser "AutoSave" comme nom de feuille fixe
+                        sheet_name_temp_res = "AutoSave"
+                    else:
+                        # En cas d'urgence, créer une nouvelle feuille
+                        sheet_name_temp_res = f"Temp_{datetime.now().strftime('%H%M%S')}"
+                    
                     data_handler.save_temp_res_data(
                         measurements.timestamps_res_temp,
                         measurements.temperatures,
-                        measurements.Tcons_values
+                        measurements.Tcons_values,
+                        sheet_name=sheet_name_temp_res
                     )
+                    
                     print(f"✓ {len(measurements.timestamps_res_temp)} points de température/résistance sauvegardés")
                     data_saved = True
                 except Exception as e:
@@ -1221,6 +1311,11 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         """Handle conductance regeneration button click"""
         # Only do something if button is active and not already in protocol
         if hasattr(plot_manager.buttons['conductance_regen'], 'active') and plot_manager.buttons['conductance_regen'].active:
+            # Check if CO2 regeneration is in progress - don't allow both at the same time
+            if measurements.regeneration_in_progress:
+                print("Impossible de démarrer le protocole Conductance pendant que le protocole CO2 est actif")
+                return
+                
             # Start conductance regeneration protocol
             success = measurements.start_conductance_regen_protocol()
             if success:
@@ -1231,9 +1326,17 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                     'message': "Starting conductance protocol",
                     'progress': 0
                 })
-                # Button will be reactivated when regeneration completes
                 
-                # Mettre à jour l'état du bouton
+                # Disable CO2 regeneration button while this protocol is active
+                if 'regeneration' in plot_manager.buttons:
+                    regeneration_co2_button = plot_manager.buttons['regeneration']
+                    regeneration_co2_button.ax.set_facecolor('lightgray')
+                    regeneration_co2_button.color = 'lightgray'
+                    regeneration_co2_button.label.set_color('black')
+                    regeneration_co2_button.active = False
+                    regeneration_co2_button.ax.figure.canvas.draw_idle()
+                
+                # Mettre à jour l'état du bouton conductance
                 regeneration_button = plot_manager.buttons['conductance_regen']
                 regeneration_button.ax.set_facecolor('lightgray')
                 regeneration_button.color = 'lightgray'
@@ -1241,26 +1344,9 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                 regeneration_button.active = False
     
     def cancel_conductance_regen(event):
-        """Handle conductance regeneration cancel button click"""
-        # Use the same cancel button as regular regeneration
-        if hasattr(plot_manager.buttons['cancel_regeneration'], 'active') and plot_manager.buttons['cancel_regeneration'].active:
-            # Cancel regeneration protocol
-            success = measurements.cancel_conductance_regen_protocol()
-            if success:
-                # Update button state
-                plot_manager.update_regeneration_status({
-                    'active': False,
-                    'step': 0,
-                    'message': "Conductance protocol cancelled",
-                    'progress': 0
-                })
-                
-                # Réactiver le bouton de protocole de conductance
-                regeneration_button = plot_manager.buttons['conductance_regen']
-                regeneration_button.ax.set_facecolor('darkblue')
-                regeneration_button.color = 'darkblue'
-                regeneration_button.label.set_color('white')
-                regeneration_button.active = True
+        """Handle conductance regeneration cancel button click - redirects to unified cancel function"""
+        # Redirect to the unified cancel function
+        cancel_regeneration(event)
     
     # Connect event handlers
     plot_manager.connect_button('conductance', toggle_conductance)
@@ -1717,14 +1803,15 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                 
             if conductance_data:
                 # Detect increase and stabilization
-                measurements.detect_increase()
-                measurements.detect_stabilization()
+                increase_detected = measurements.detect_increase()
+                stabilization_detected = measurements.detect_stabilization()
                 
                 # Vérifier si les indicateurs doivent être réinitialisés (conductance < 5 µS)
+                # Cela ne réinitialise plus le temps de percolation, juste les indicateurs de détection
                 indicators_reset = measurements.check_reset_detection_indicators()
                 
                 # Détecter la restabilisation post-régénération si nécessaire
-                measurements.detect_post_regen_stability()
+                post_stability_detected = measurements.detect_post_regen_stability()
                 
                 # Update plots and indicators
                 plot_manager.update_conductance_plot(
@@ -1738,6 +1825,17 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                         'post_regen_stability_time': measurements.post_regen_stability_time
                     }
                 )
+                
+                # Mettre à jour l'indicateur du temps de percolation si une augmentation est détectée
+                if increase_detected or measurements.increase_detected:
+                    if 'percolation_time_display' in plot_manager.indicators and measurements.increase_time is not None:
+                        ax_percolation_time = plot_manager.indicators['percolation_time_display']
+                        ax_percolation_time.clear()
+                        ax_percolation_time.text(0.5, 0.5, f"T perco: {measurements.increase_time:.1f} s", 
+                                              ha="center", va="center", transform=ax_percolation_time.transAxes)
+                        ax_percolation_time.axis('off')
+                        # Redessiner pour mettre à jour l'indicateur
+                        ax_percolation_time.figure.canvas.draw_idle()
                 
                 plot_manager.update_detection_indicators(
                     measurements.increase_detected,
@@ -1896,6 +1994,36 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
             try:
                 regeneration_status = measurements.manage_regeneration_protocol()
                 plot_manager.update_regeneration_status(regeneration_status, measurements.regeneration_results)
+                
+                # Force completion de protocole s'il atteint 100%
+                if regeneration_status.get('progress', 0) >= 100:
+                    print("CO2 protocol completed at 100%")
+                    regeneration_status['active'] = False
+                    measurements.regeneration_in_progress = False
+                
+                # Réactiver le bouton de protocole si terminé
+                if not regeneration_status['active']:
+                    # Re-enable both protocol buttons based on measurement conditions
+                    plot_manager.update_protocol_button_states(
+                        measure_co2_temp_humidity_active,
+                        measure_conductance_active,
+                        measure_res_temp_active
+                    )
+                    
+                    # Hide the cancel button
+                    if 'cancel_regeneration' in plot_manager.buttons:
+                        cancel_button = plot_manager.buttons['cancel_regeneration']
+                        cancel_button.ax.set_visible(False)
+                        cancel_button.active = False
+                        cancel_button.ax.figure.canvas.draw_idle()
+                else:
+                    # Show the cancel button during the protocol
+                    if 'cancel_regeneration' in plot_manager.buttons:
+                        cancel_button = plot_manager.buttons['cancel_regeneration']
+                        if not cancel_button.ax.get_visible():
+                            cancel_button.ax.set_visible(True)
+                            cancel_button.active = True
+                            cancel_button.ax.figure.canvas.draw_idle()
             except Exception as e:
                 print(f"Error managing regeneration protocol: {e}")
                 # Incrémenter les compteurs d'erreurs des deux appareils impliqués dans la régénération
@@ -1908,27 +2036,49 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                 conductance_regen_status = measurements.manage_conductance_regen_protocol()
                 plot_manager.update_regeneration_status(conductance_regen_status)
                 
-                # Réactiver le bouton de protocole si terminé
+                # Force completion de protocole s'il atteint 100%
+                if conductance_regen_status.get('progress', 0) >= 100:
+                    print("Conductance protocol completed at 100%")
+                    conductance_regen_status['active'] = False
+                    measurements.conductance_regen_in_progress = False
+                
+                # Réactiver les boutons de protocole si terminé
                 if not conductance_regen_status['active']:
-                    if 'conductance_regen' in plot_manager.buttons:
-                        regeneration_button = plot_manager.buttons['conductance_regen']
-                        regeneration_button.ax.set_facecolor('darkblue')
-                        regeneration_button.color = 'darkblue'
-                        regeneration_button.label.set_color('white')
-                        regeneration_button.active = True
-                        
-                # Afficher le bouton d'annulation pendant le protocole
-                if conductance_regen_status['active'] and 'cancel_regeneration' in plot_manager.buttons:
-                    cancel_button = plot_manager.buttons['cancel_regeneration']
-                    if not cancel_button.ax.get_visible():
-                        cancel_button.ax.set_visible(True)
-                        cancel_button.active = True
+                    # Re-enable protocol buttons based on measurement conditions
+                    plot_manager.update_protocol_button_states(
+                        measure_co2_temp_humidity_active,
+                        measure_conductance_active,
+                        measure_res_temp_active
+                    )
+                    
+                    # Hide the cancel button
+                    if 'cancel_regeneration' in plot_manager.buttons:
+                        cancel_button = plot_manager.buttons['cancel_regeneration']
+                        cancel_button.ax.set_visible(False)
+                        cancel_button.active = False
                         cancel_button.ax.figure.canvas.draw_idle()
+                else:
+                    # Show the cancel button during the protocol
+                    if 'cancel_regeneration' in plot_manager.buttons:
+                        cancel_button = plot_manager.buttons['cancel_regeneration']
+                        if not cancel_button.ax.get_visible():
+                            cancel_button.ax.set_visible(True)
+                            cancel_button.active = True
+                            cancel_button.ax.figure.canvas.draw_idle()
             except Exception as e:
                 print(f"Error managing conductance regeneration protocol: {e}")
                 # Incrémenter les compteurs d'erreurs des deux appareils impliqués
                 device_error_count['regen'] += 1
                 device_error_count['keithley'] += 1
+                
+        # S'assurer que le bouton d'annulation est caché si aucun protocole n'est en cours
+        if not measurements.regeneration_in_progress and not measurements.conductance_regen_in_progress:
+            if 'cancel_regeneration' in plot_manager.buttons:
+                cancel_button = plot_manager.buttons['cancel_regeneration']
+                if cancel_button.ax.get_visible():
+                    cancel_button.ax.set_visible(False)
+                    cancel_button.active = False
+                    cancel_button.ax.figure.canvas.draw_idle()
             
         # Vérifier si des erreurs d'appareils ont été détectées ou si l'intervalle de sauvegarde automatique est écoulé
         current_time = time.time()
@@ -1981,11 +2131,8 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
             if hasattr(plot_manager, 'update_backup_status'):
                 plot_manager.update_backup_status(last_backup_status)
             
-            # Montrer une notification à l'utilisateur si nous sommes en mode d'urgence 
-            # ou si c'est une sauvegarde périodique réussie (mais moins fréquemment)
-            if backup_successful and (emergency_mode or (current_time - last_notification_time > 300)):  # 5 minutes minimum entre notifs périodiques
-                # Cette fonction vérifie elle-même si la période de refroidissement est respectée
-                show_backup_notification(backup_reason)
+            # Notification supprimée pour éviter d'interrompre l'utilisateur
+            # Nous gardons uniquement la mise à jour de l'indicateur dans l'interface
             
         # Update UI - délai court pour une meilleure réactivité tout en donnant une chance au ramasse-miettes Python de libérer la mémoire
         plt.pause(0.01)

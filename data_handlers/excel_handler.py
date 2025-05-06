@@ -187,16 +187,26 @@ class ExcelHandler:
             
             # Vérifier si la feuille existe déjà
             sheet_exists = sheet_name in wb.sheetnames
-            if sheet_exists:
+            
+            # Cas spécial pour "AutoSave": on remplace la feuille existante
+            if sheet_exists and sheet_name == "AutoSave":
+                # Supprimer la feuille existante pour la recréer
+                wb.remove(wb[sheet_name])
+                ws = wb.create_sheet(sheet_name)
+                print(f"Mise à jour de la feuille 'AutoSave' existante")
+            elif sheet_exists:
                 # Générer un nom unique en ajoutant un suffixe numérique
                 base_name = sheet_name
                 counter = 1
                 while sheet_name in wb.sheetnames:
                     sheet_name = f"{base_name}_{counter}"
                     counter += 1
-            
-            # Créer la nouvelle feuille
-            ws = wb.create_sheet(sheet_name)
+                
+                # Créer la nouvelle feuille avec le nom généré
+                ws = wb.create_sheet(sheet_name)
+            else:
+                # Créer la nouvelle feuille
+                ws = wb.create_sheet(sheet_name)
             
             # Ajouter les données
             for col_num, (key, values) in enumerate(data.items(), 1):
@@ -347,22 +357,31 @@ class ExcelHandler:
         
         return True
     
-    def save_conductance_data(self, timeList, conductanceList, resistanceList):
-        """Sauvegarde les données de conductance"""
+    def save_conductance_data(self, timeList, conductanceList, resistanceList, sheet_name=None):
+        """
+        Sauvegarde les données de conductance
+        
+        Args:
+            timeList: Liste des timestamps
+            conductanceList: Liste des valeurs de conductance
+            resistanceList: Liste des valeurs de résistance
+            sheet_name: Nom de la feuille à utiliser (ou None pour créer un nom basé sur l'horodatage)
+        """
         if not self.conductance_file:
             self.initialize_file("conductance")
         
         if not timeList or len(timeList) == 0:
             return False
         
-        # Créer un nom unique pour la feuille en utilisant l'horodatage actuel
-        sheet_name = f"Cond_{datetime.now().strftime('%H%M%S')}"
+        # Si aucun nom de feuille n'est fourni, en créer un avec l'horodatage
+        if sheet_name is None:
+            sheet_name = f"Cond_{datetime.now().strftime('%H%M%S')}"
         
         # Vérifier si cette feuille existe déjà
         try:
             wb = load_workbook(self.conductance_file)
-            if sheet_name in wb.sheetnames:
-                # Génère un nom alternatif en ajoutant un suffixe
+            if sheet_name in wb.sheetnames and sheet_name != "AutoSave":
+                # Génère un nom alternatif en ajoutant un suffixe (sauf pour AutoSave)
                 sheet_name = f"{sheet_name}_{self.conductance_series_count}"
         except Exception as e:
             print(f"Warning: Couldn't check for duplicate sheet names: {e}")
@@ -392,8 +411,21 @@ class ExcelHandler:
         # Save current test data
         return self.add_sheet_to_excel(self.conductance_file, sheet_name, data)
     
-    def save_co2_temp_humidity_data(self, co2_timestamps, co2_values, temp_timestamps, temp_values, humidity_timestamps, humidity_values, delta_c=None, carbon_mass=None):
-        """Sauvegarde les données CO2/temp/humidity"""
+    def save_co2_temp_humidity_data(self, co2_timestamps, co2_values, temp_timestamps, temp_values, humidity_timestamps, humidity_values, delta_c=None, carbon_mass=None, sheet_name=None):
+        """
+        Sauvegarde les données CO2/temp/humidity
+        
+        Args:
+            co2_timestamps: Liste des timestamps CO2
+            co2_values: Liste des valeurs CO2
+            temp_timestamps: Liste des timestamps température
+            temp_values: Liste des valeurs température
+            humidity_timestamps: Liste des timestamps humidité
+            humidity_values: Liste des valeurs humidité
+            delta_c: Différence de CO2 (optionnel)
+            carbon_mass: Masse de carbone (optionnel) 
+            sheet_name: Nom de la feuille à utiliser (ou None pour créer un nom basé sur l'horodatage)
+        """
         if not self.co2_temp_humidity_file:
             self.initialize_file("co2_temp_humidity")
         
@@ -418,8 +450,18 @@ class ExcelHandler:
         # Incrémenter le compteur à chaque sauvegarde (start button)
         self.co2_temp_humidity_series_count += 1
         
-        # Create current test data sheet
-        sheet_name = f"CO2_{datetime.now().strftime('%H%M%S')}"
+        # Si aucun nom de feuille n'est fourni, en créer un avec l'horodatage
+        if sheet_name is None:
+            sheet_name = f"CO2_{datetime.now().strftime('%H%M%S')}"
+        
+        # Vérifier si cette feuille existe déjà
+        try:
+            wb = load_workbook(self.co2_temp_humidity_file)
+            if sheet_name in wb.sheetnames and sheet_name != "AutoSave":
+                # Génère un nom alternatif en ajoutant un suffixe (sauf pour AutoSave)
+                sheet_name = f"{sheet_name}_{self.co2_temp_humidity_series_count}"
+        except Exception as e:
+            print(f"Warning: Couldn't check for duplicate sheet names: {e}")
         data = {
             'Minutes': [t / 60.0 for t in timestamps],
             'Temps (s)': timestamps,
@@ -453,8 +495,16 @@ class ExcelHandler:
         
         return result
     
-    def save_temp_res_data(self, timestamps, temperatures, tcons_values):
-        """Sauvegarde les données temp/resistance"""
+    def save_temp_res_data(self, timestamps, temperatures, tcons_values, sheet_name=None):
+        """
+        Sauvegarde les données temp/resistance
+        
+        Args:
+            timestamps: Liste des timestamps
+            temperatures: Liste des valeurs de température
+            tcons_values: Liste des valeurs de consigne de température
+            sheet_name: Nom de la feuille à utiliser (ou None pour créer un nom basé sur l'horodatage)
+        """
         if not self.temp_res_file:
             self.initialize_file("temp_res")
         
@@ -475,8 +525,18 @@ class ExcelHandler:
         # Incrémenter le compteur à chaque sauvegarde (start button)
         self.temp_res_series_count += 1
         
-        # Create current test data sheet
-        sheet_name = f"Temp_{datetime.now().strftime('%H%M%S')}"
+        # Si aucun nom de feuille n'est fourni, en créer un avec l'horodatage
+        if sheet_name is None:
+            sheet_name = f"Temp_{datetime.now().strftime('%H%M%S')}"
+        
+        # Vérifier si cette feuille existe déjà
+        try:
+            wb = load_workbook(self.temp_res_file)
+            if sheet_name in wb.sheetnames and sheet_name != "AutoSave":
+                # Génère un nom alternatif en ajoutant un suffixe (sauf pour AutoSave)
+                sheet_name = f"{sheet_name}_{self.temp_res_series_count}"
+        except Exception as e:
+            print(f"Warning: Couldn't check for duplicate sheet names: {e}")
         data = {
             'Minutes': [t / 60.0 for t in timestamps],
             'Temps (s)': timestamps,
