@@ -39,7 +39,12 @@ a = Analysis(
     ['{}'],
     pathex=['{}'],
     binaries=[],
-    datas=[],
+    datas=[
+        ('README.md', '.'),
+        ('DOCUMENTATION.md', '.'),
+        ('mkdocs.yml', '.'),
+        ('docs', 'docs'),  # Include the docs directory if it exists
+    ],
     hiddenimports=[
         'matplotlib',
         'numpy',
@@ -134,6 +139,29 @@ Cet exécutable contient le systeme complet de capteurs. Il ne nécessite pas d'
         # Copy README to dist folder
         dist_readme = os.path.join(current_dir, 'dist', 'README.md')
         shutil.copy2(readme_path, dist_readme)
+        
+        # Copy other documentation files
+        docs_files = {
+            'README.md': 'README.md',
+            'DOCUMENTATION.md': 'DOCUMENTATION.md',
+            'mkdocs.yml': 'mkdocs.yml'
+        }
+        
+        for src_file, dest_file in docs_files.items():
+            src_path = os.path.join(current_dir, src_file)
+            if os.path.exists(src_path):
+                dest_path = os.path.join(current_dir, 'dist', dest_file)
+                shutil.copy2(src_path, dest_path)
+                print(f"Copied {src_file} to dist folder")
+        
+        # Copy docs directory if it exists
+        docs_dir = os.path.join(current_dir, 'docs')
+        if os.path.exists(docs_dir) and os.path.isdir(docs_dir):
+            docs_dist_dir = os.path.join(current_dir, 'dist', 'docs')
+            if os.path.exists(docs_dist_dir):
+                shutil.rmtree(docs_dist_dir)
+            shutil.copytree(docs_dir, docs_dist_dir)
+            print("Copied docs directory to dist folder")
         
         print("Executable created successfully in the 'dist' folder.")
         print(f"Execute path: {os.path.join(current_dir, 'dist', 'SensorSystem.exe')}")
