@@ -1,5 +1,7 @@
 """
-Interface pour l'appareil Arduino
+Interface pour l'appareil Arduino.
+Gère la communication avec l'Arduino qui mesure le CO2, la température et l'humidité.
+Auteur: Guillaume Pailloux
 """
 
 import serial
@@ -23,15 +25,20 @@ class ArduinoDevice:
         self.device = None
     
     def connect(self):
-        """Connexion à l'appareil Arduino"""
+        """
+        Établit la connexion à l'appareil Arduino via le port série
+        
+        Returns:
+            bool: True si la connexion a réussi, False sinon
+        """
         try:
             if not self.port:
-                raise ValueError("Serial port not specified")
+                raise ValueError("Port série non spécifié")
             
             self.device = serial.Serial(self.port, self.baud_rate, timeout=self.timeout)
             return True
         except Exception as e:
-            print(f"Error connecting to Arduino: {e}")
+            print(f"Erreur de connexion à l'Arduino: {e}")
             return False
     
     def read_line(self):
@@ -46,19 +53,19 @@ class ArduinoDevice:
             if not self.device:
                 return None
                 
-            # Vérifier s'il y a des données disponibles
+            # Vérifie s'il y a des données disponibles dans le buffer
             if self.device.in_waiting > 0:
                 line = self.device.readline().decode('utf-8').strip()
                 return line
-            # Si pas de données disponibles, retourner None immédiatement
+            # Si aucune donnée n'est disponible, retourne None immédiatement sans bloquer
             return None
         except UnicodeDecodeError:
-            # Si on a une erreur de décodage, essayer avec un autre encodage ou ignorer
+            # En cas d'erreur de décodage UTF-8, essaie avec l'encodage Latin-1 comme solution de repli
             try:
                 line = self.device.readline().decode('latin-1').strip()
                 return line
             except Exception:
-                print("Error decoding Arduino data")
+                print("Erreur de décodage des données Arduino")
                 return None
         except Exception as e:
             print(f"Erreur lors de la lecture depuis Arduino: {e}")
@@ -81,16 +88,21 @@ class ArduinoDevice:
             self.device.write(command.encode('utf-8'))
             return True
         except Exception as e:
-            print(f"Error sending command to Arduino: {e}")
+            print(f"Erreur lors de l'envoi de commande à l'Arduino: {e}")
             return False
     
     def close(self):
-        """Fermer la connexion à l'Arduino"""
+        """
+        Ferme proprement la connexion à l'Arduino
+        
+        Returns:
+            bool: True si la fermeture a réussi ou si l'appareil était déjà fermé, False en cas d'erreur
+        """
         if self.device:
             try:
                 self.device.close()
                 return True
             except Exception as e:
-                print(f"Error closing Arduino connection: {e}")
+                print(f"Erreur lors de la fermeture de la connexion Arduino: {e}")
                 return False
         return True

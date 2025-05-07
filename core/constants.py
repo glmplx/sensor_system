@@ -1,37 +1,38 @@
 """
-Constantes utilisées dans toute l'application
+Constantes utilisées dans toute l'application de système de capteurs.
+Définit les seuils, paramètres et configurations pour les différents dispositifs et protocoles.
 """
 
-# Constantes de mesure
-STABILITY_DURATION = 2 * 60  # 3 minutes en secondes
-INCREASE_SLOPE_MIN = 0.1  # Seuil minimum pour la pente en µS/s
-INCREASE_SLOPE_MAX = 0.7  # Seuil maximum pour la pente en µS/s
-DECREASE_SLOPE_THRESHOLD = -0.05  # Seuil pour détecter une diminution de conductance
-SLIDING_WINDOW = 2.5 * 60  # Fenêtre de 2,5 minutes pour le calcul de la pente
-R0_THRESHOLD = 12  # Seuil pour R0
-REGENERATION_TEMP = 700  # Température pour la régénération et point de consigne haute température
-TCONS_LOW = 0  # Point de consigne basse température
-VALVE_DELAY = 4  # Délai en secondes après opération de vanne
+# Constantes de mesure pour la détection de conductance
+STABILITY_DURATION = 2 * 60  # Durée requise en secondes pour considérer la conductance comme stable
+INCREASE_SLOPE_MIN = 0.1  # Seuil minimum pour la pente d'augmentation de conductance en µS/s
+INCREASE_SLOPE_MAX = 0.7  # Seuil maximum pour la pente d'augmentation de conductance en µS/s
+DECREASE_SLOPE_THRESHOLD = -0.05  # Seuil négatif pour détecter une diminution de conductance en µS/s
+SLIDING_WINDOW = 2.5 * 60  # Taille de la fenêtre glissante en secondes pour le calcul de la pente
+R0_THRESHOLD = 12  # Seuil de résistance R0 en Ohms pour le calcul de conductance
+REGENERATION_TEMP = 700  # Température en °C pour la régénération et point de consigne haute température
+TCONS_LOW = 0  # Point de consigne basse température en °C
+VALVE_DELAY = 4  # Délai d'attente en secondes après opération d'ouverture/fermeture de vanne
 
-# Paramètres de stabilité CO2 pour le protocole de régénération
-CO2_STABILITY_THRESHOLD = 5  # Seuil de stabilité CO2 en ppm
-CO2_STABILITY_DURATION = 60  # 60 secondes pour la stabilité CO2
-REGENERATION_DURATION = 2*60  # 120 secondes de régénération à haute température
-CELL_VOLUME = 0.965  # Volume de la cellule en litres
+# Paramètres pour le protocole de régénération CO2
+CO2_STABILITY_THRESHOLD = 5  # Variation maximale en ppm pour considérer le CO2 comme stable
+CO2_STABILITY_DURATION = 60  # Durée en secondes pendant laquelle le CO2 doit être stable
+REGENERATION_DURATION = 2*60  # Durée en secondes du maintien à haute température pendant la régénération
+CELL_VOLUME = 0.965  # Volume de la cellule de mesure en litres pour le calcul de masse de carbone
 
-# Configuration Keithley 6517
-KEITHLEY_GPIB_ADDRESS = "GPIB0::27::INSTR"
+# Configuration du multimètre Keithley 6517
+KEITHLEY_GPIB_ADDRESS = "GPIB0::27::INSTR"  # Adresse GPIB de l'appareil Keithley
 KEITHLEY_COMMANDS = {
-    "ZERO_CHECK_OFF": ":SYST:ZCH OFF",
-    "MODE_RESISTANCE": ":SENS:FUNC 'RES'",
-    "AUTO_RANGE_LOW_LIMIT": ":SENS:RES:RANG:AUTO:LLIM 100",
-    "AUTO_RANGE_HIGH_LIMIT": ":SENS:RES:RANG:AUTO:ULIM 100000",
-    "VOLTAGE_RANGE": ":SOUR:VOLT:RANG 10",
-    "VOLTAGE_LEVEL": ":SOUR:VOLT:LEV 10",
-    "OUTPUT_ON": ":OUTP ON",
-    "OUTPUT_OFF": ":OUTP OFF",
-    "READ_FRESH": ":SENSe:DATA:FRESH?"
+    "ZERO_CHECK_OFF": ":SYST:ZCH OFF",  # Désactive la vérification du zéro
+    "MODE_RESISTANCE": ":SENS:FUNC 'RES'",  # Configure l'appareil en mode mesure de résistance
+    "AUTO_RANGE_LOW_LIMIT": ":SENS:RES:RANG:AUTO:LLIM 100",  # Limite inférieure de l'auto-range en Ohms
+    "AUTO_RANGE_HIGH_LIMIT": ":SENS:RES:RANG:AUTO:ULIM 100000",  # Limite supérieure de l'auto-range en Ohms
+    "VOLTAGE_RANGE": ":SOUR:VOLT:RANG 10",  # Configure la plage de tension à 10V
+    "VOLTAGE_LEVEL": ":SOUR:VOLT:LEV 10",  # Configure le niveau de tension à 10V
+    "OUTPUT_ON": ":OUTP ON",  # Active la sortie
+    "OUTPUT_OFF": ":OUTP OFF",  # Désactive la sortie
+    "READ_FRESH": ":SENSe:DATA:FRESH?"  # Commande pour lire une nouvelle mesure
 }
 
-# Opérations de fichier
-EXCEL_BASE_DIR = "donnees_excel"
+# Configuration de stockage des données
+EXCEL_BASE_DIR = "donnees_excel"  # Répertoire de base pour le stockage des fichiers Excel générés

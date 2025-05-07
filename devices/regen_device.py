@@ -1,5 +1,6 @@
 """
-Interface pour l'appareil de régénération
+Interface pour l'appareil de régénération.
+Gère la communication série avec l'appareil qui contrôle la température de la résistance.
 """
 
 import serial
@@ -7,7 +8,7 @@ import time
 from serial.serialutil import SerialException
 
 class RegenDevice:
-    """Interface pour l'appareil de régénération de résistance"""
+    """Interface pour l'appareil de régénération de résistance, permettant de contrôler et lire la température"""
     
     def __init__(self, port=None, baud_rate=115200, timeout=2):
         """
@@ -24,15 +25,20 @@ class RegenDevice:
         self.device = None
     
     def connect(self):
-        """Connexion à l'appareil de régénération"""
+        """
+        Établit la connexion à l'appareil de régénération
+        
+        Returns:
+            bool: True si la connexion a réussi, False sinon
+        """
         try:
             if not self.port:
-                raise ValueError("Serial port not specified")
+                raise ValueError("Port série non spécifié")
             
             self.device = serial.Serial(self.port, self.baud_rate, timeout=self.timeout)
             return True
         except Exception as e:
-            print(f"Error connecting to regeneration device: {e}")
+            print(f"Erreur de connexion à l'appareil de régénération: {e}")
             return False
     
     def read_variable(self, command, address):
@@ -56,12 +62,12 @@ class RegenDevice:
                 self.device = None
                 return "0.0"
                 
-            # Vider le buffer d'entrée avant d'envoyer la commande
+            # Vider le tampon d'entrée avant d'envoyer la commande
             self.device.reset_input_buffer()
             
             # Envoyer la commande complète
             self.device.write(f"{command}{address}".encode())
-            time.sleep(0.2)  # Augmenter le délai pour donner plus de temps à la réponse
+            time.sleep(0.2)  # Délai pour donner le temps au périphérique de répondre
             
             # Vérifier encore une fois si le port est ouvert avant la lecture
             if not self.device.is_open:
@@ -69,7 +75,7 @@ class RegenDevice:
                 self.device = None
                 return "0.0"
             
-            # Ajouter un délai pour attendre que toutes les données soient disponibles
+            # Attendre que les données soient disponibles avec plusieurs tentatives
             attempts = 0
             while self.device.in_waiting == 0 and attempts < 5:
                 time.sleep(0.1)  # Attendre 100ms
@@ -148,7 +154,12 @@ class RegenDevice:
             return False
     
     def close(self):
-        """Fermer la connexion à l'appareil de régénération"""
+        """
+        Ferme proprement la connexion à l'appareil de régénération
+        
+        Returns:
+            bool: True si la fermeture a réussi ou si l'appareil était déjà fermé, False en cas d'erreur
+        """
         if self.device:
             try:
                 # Vérifier si le port est déjà fermé avant d'essayer de le fermer

@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 """
 Application en mode automatique pour le système de capteurs
+
+Ce module gère l'application en mode automatique qui permet la détection et la mesure
+automatisée de conductance avec régénération automatique du capteur.
 """
 
 import sys
@@ -20,7 +23,18 @@ from ui.plot_manager import PlotManager
 from utils.helpers import parse_pin_states
 
 def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_rate=None):
-    """Point d'entrée principal pour l'application en mode automatique"""
+    """
+    Point d'entrée principal pour l'application en mode automatique
+    
+    Cette fonction initialise les appareils, configure l'interface graphique et exécute
+    la boucle principale qui gère la détection de conductance et la régénération automatiques.
+    
+    Args:
+        arduino_port: Port COM de l'Arduino (CO2, température, humidité)
+        arduino_baud_rate: Débit en bauds pour la communication avec l'Arduino
+        other_port: Port COM de la carte de régénération
+        other_baud_rate: Débit en bauds pour la communication avec la carte de régénération
+    """
     
     # If parameters aren't provided, try to get them from command line
     if arduino_port is None:
@@ -69,14 +83,20 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
     measure_auto = False
     escape_pressed = False
     
-    # Function to handle window X button close event
+    # Fonction pour gérer l'événement de fermeture de la fenêtre par le bouton X
     def handle_window_close(event=None):
+        """
+        Gère l'événement de fermeture de la fenêtre par le bouton X
+        
+        Args:
+            event: Événement de fermeture de la fenêtre
+        """
         nonlocal escape_pressed
         if not escape_pressed:  # Éviter une double fermeture
-            # Call the same quit function used by the quit button
+            # Appeler la même fonction que le bouton Quitter
             quit_program(event)
         
-    # Register the close handler
+    # Enregistrer le gestionnaire de fermeture
     plot_manager.set_close_callback(handle_window_close)
     
     # Initialize R0 display
@@ -92,19 +112,29 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         regeneration_button.label.set_color('black')
         regeneration_button.active = False
     
-    # Define event handlers
+    # Définir les gestionnaires d'événements
     def toggle_auto(event):
+        """
+        Active ou désactive les mesures automatiques
+        
+        Cette fonction gère l'activation/désactivation des mesures automatiques,
+        incluant l'initialisation des fichiers, l'activation du Keithley et la 
+        gestion des temps de pause pour maintenir des timestamps cohérents.
+        
+        Args:
+            event: Événement déclencheur (clic sur le bouton)
+        """
         nonlocal measure_auto
         previous_state = measure_auto
         measure_auto = not measure_auto
         
         if measure_auto:
-            # Initialize files if needed
+            # Initialiser les fichiers si nécessaire
             data_handler.initialize_file("conductance")
             data_handler.initialize_file("co2_temp_humidity")
             data_handler.initialize_file("temp_res")
             
-            # Start measurements
+            # Démarrer les mesures
             keithley.turn_output_on()
             print("Automatic measurements started")
             
@@ -128,7 +158,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                 regeneration_button.active = True
                 regeneration_button.ax.figure.canvas.draw_idle()
         else:
-            # Stop measurements
+            # Arrêter les mesures
             keithley.turn_output_off()
             print("Automatic measurements stopped")
             
@@ -149,11 +179,21 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                 regeneration_button.active = False
                 regeneration_button.ax.figure.canvas.draw_idle()
         
-        # Update UI
+        # Mettre à jour l'interface utilisateur
         plot_manager.update_raz_buttons_visibility({'auto': measure_auto})
     
     def raz_auto(event):
-        # Save current data before reset only if there's data to save
+        """
+        Réinitialise les données de mesure en mode automatique
+        
+        Cette fonction sauvegarde d'abord les données actuelles dans les fichiers Excel,
+        puis réinitialise les données de mesure et les graphiques. Elle conserve l'historique
+        des données déjà enregistrées.
+        
+        Args:
+            event: Événement déclencheur (clic sur le bouton)
+        """
+        # Sauvegarder les données actuelles avant réinitialisation
         # Sauvegarder les données de conductance
         if len(measurements.timeList) > 0:
             data_handler.save_conductance_data(
@@ -187,15 +227,15 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
             # Ne pas réinitialiser les données accumulées pour garder l'historique
             # Les temps sont ajustés automatiquement dans save_temp_res_data
         
-        # Reset all data
+        # Réinitialiser toutes les données
         measurements.reset_data()
         
-        # Reset plots
+        # Réinitialiser les graphiques
         plot_manager.update_conductance_plot([], [])
         plot_manager.update_co2_temp_humidity_plot([], [], [], [], [], [])
         plot_manager.update_res_temp_plot([], [], [])
         
-        # Reset detection indicators
+        # Réinitialiser les indicateurs de détection
         plot_manager.update_detection_indicators(False, False)
     
     def set_R0(event):
@@ -220,37 +260,63 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         # La couleur est maintenue automatiquement par le connect_button modifié
     
     def start_regeneration(event):
-        """Handle regeneration button click"""
-        # Only do something if button is active (not already in regeneration)
+        """
+        Gère le clic sur le bouton de régénération
+        
+        Cette fonction démarre le protocole de régénération du capteur qui implique
+        le chauffage du capteur pour éliminer les molécules adsorbées.
+        
+        Args:
+            event: Événement déclencheur (clic sur le bouton)
+        """
+        # Agir uniquement si le bouton est actif (pas déjà en régénération)
         if hasattr(plot_manager.buttons['regeneration'], 'active') and plot_manager.buttons['regeneration'].active:
-            # Start regeneration protocol
+            # Démarrer le protocole de régénération
             success = measurements.start_regeneration_protocol()
             if success:
-                # Update button state
+                # Mettre à jour l'état du bouton
                 plot_manager.update_regeneration_status({
                     'active': True,
                     'step': 1,
-                    'message': "Starting regeneration protocol",
+                    'message': "Démarrage du protocole de régénération",
                     'progress': 0
                 })
-                # Button will be reactivated when regeneration completes
+                # Le bouton sera réactivé lorsque la régénération sera terminée
     
     def cancel_regeneration(event):
-        """Handle regeneration cancel button click"""
-        # Only do something if button is active and visible
+        """
+        Gère le clic sur le bouton d'annulation de régénération
+        
+        Cette fonction annule le protocole de régénération en cours et
+        ramène le système à son état normal.
+        
+        Args:
+            event: Événement déclencheur (clic sur le bouton)
+        """
+        # Agir uniquement si le bouton est actif et visible
         if hasattr(plot_manager.buttons['cancel_regeneration'], 'active') and plot_manager.buttons['cancel_regeneration'].active:
-            # Cancel regeneration protocol
+            # Annuler le protocole de régénération
             success = measurements.cancel_regeneration_protocol()
             if success:
-                # Update button state
+                # Mettre à jour l'état du bouton
                 plot_manager.update_regeneration_status({
                     'active': False,
                     'step': 0,
-                    'message': "Regeneration cancelled",
+                    'message': "Régénération annulée",
                     'progress': 0
                 })
     
     def quit_program(event):
+        """
+        Gère la fermeture propre du programme
+        
+        Cette fonction sauvegarde les données, propose de renommer le dossier de données,
+        réinitialise la température consigne, ferme les connexions avec les appareils et
+        nettoie les ressources graphiques avant de quitter le programme.
+        
+        Args:
+            event: Événement déclencheur (clic sur le bouton ou fermeture de fenêtre)
+        """
         nonlocal escape_pressed
         # Définir Tcons à 0°C avant de fermer
         try:
@@ -312,7 +378,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         except Exception as e:
             print(f"Erreur lors de la sauvegarde des données: {e}")
 
-        # Close all connections
+        # Fermer toutes les connexions
         print("Fermeture des connexions...")
         try:
             keithley.close()
@@ -379,6 +445,18 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         if not measure_auto:  # Seulement quand le mode auto n'est pas actif
             # Fonction pour traiter les états des pins et mettre à jour l'UI
             def process_pin_states(line):
+                """
+                Traite les informations d'état des pins et met à jour l'interface
+                
+                Cette fonction analyse les états des pins (capteurs de position) depuis
+                une ligne de données Arduino et met à jour les indicateurs visuels correspondants.
+                
+                Args:
+                    line: Ligne de texte contenant les informations d'état des pins
+                    
+                Returns:
+                    bool: True si des états de pins ont été traités, False sinon
+                """
                 pin_states = parse_pin_states(line)
                 if pin_states:
                     # Stocker les états des pins pour la mise à jour de l'UI

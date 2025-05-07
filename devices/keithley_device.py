@@ -1,5 +1,7 @@
 """
-Interface pour l'appareil Keithley 6517
+Interface pour l'appareil Keithley 6517.
+Gère la communication, la configuration et les mesures de résistance via l'instrument GPIB.
+Auteur: Guillaume Pailloux
 """
 
 import time
@@ -8,11 +10,11 @@ import sys
 from core.constants import KEITHLEY_COMMANDS, KEITHLEY_GPIB_ADDRESS
 
 class KeithleyDevice:
-    """Interface pour l'électromètre Keithley 6517"""
+    """Interface pour l'électromètre Keithley 6517 permettant la mesure précise de résistance électrique"""
     
-    # Définir le gestionnaire d'exceptions personnalisé pour intercepter les erreurs non gérées
+    # Gestionnaire d'exceptions personnalisé pour intercepter les erreurs VISA non gérées
     def _custom_excepthook(self, etype, evalue, etraceback):
-        # Si c'est une erreur VisaIOError avec le code VI_ERROR_CLOSING_FAILED
+        # Vérifie si l'erreur est une VisaIOError avec le code spécifique VI_ERROR_CLOSING_FAILED
         if etype == pyvisa.errors.VisaIOError and (
             str(getattr(evalue, 'error_code', '')) == '-1073807338' or 
             'VI_ERROR_CLOSING_FAILED' in str(evalue)
@@ -20,7 +22,7 @@ class KeithleyDevice:
             if not hasattr(self, '_closing_error_handled') or not self._closing_error_handled:
                 print("Info: Appareil Keithley déconnecté de manière inattendue.")
         else:
-            # Sinon, passer à l'exception hook d'origine
+            # Pour les autres types d'erreurs, utiliser le gestionnaire d'exceptions par défaut
             self._original_excepthook(etype, evalue, etraceback)
     
     def __init__(self, gpib_address=KEITHLEY_GPIB_ADDRESS):
@@ -32,26 +34,36 @@ class KeithleyDevice:
         """
         self.gpib_address = gpib_address
         self.device = None
-        # Pour empêcher les erreurs lors du garbage collection
+        # Indicateur pour éviter la duplication des messages d'erreur lors du garbage collection
         self._closing_error_handled = False
         
-        # Installer le hook d'exception personnalisé
+        # Installe le gestionnaire d'exceptions personnalisé pour capturer les erreurs VISA
         self._original_excepthook = sys.excepthook
         sys.excepthook = lambda etype, evalue, etb: self._custom_excepthook(etype, evalue, etb)
     
     def connect(self):
-        """Connexion à l'appareil Keithley"""
+        """
+        Établit la connexion à l'appareil Keithley via GPIB
+        
+        Returns:
+            bool: True si la connexion a réussi, False sinon
+        """
         try:
             rm = pyvisa.ResourceManager()
             self.device = rm.open_resource(self.gpib_address)
             self.configure()
             return True
         except Exception as e:
-            print(f"Error connecting to Keithley: {e}")
+            print(f"Erreur de connexion à l'appareil Keithley: {e}")
             return False
     
     def configure(self):
-        """Configurer l'appareil Keithley"""
+        """
+        Configure l'appareil Keithley avec les paramètres nécessaires pour les mesures de résistance
+        
+        Returns:
+            bool: True si la configuration a réussi, False sinon
+        """
         try:
             # Désactiver la vérification zéro
             self.device.write(KEITHLEY_COMMANDS["ZERO_CHECK_OFF"])

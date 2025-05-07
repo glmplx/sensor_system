@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Manual mode application for the sensor system
+Application en mode manuel pour le système de capteurs
 """
 
 import sys
@@ -23,26 +23,26 @@ from ui.plot_manager import PlotManager
 def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_rate=None,
          measure_conductance=1, measure_co2=1, measure_regen=1):
     """
-    Main entry point for the manual mode application
+    Point d'entrée principal pour l'application en mode manuel
     
     Args:
-        arduino_port: COM port for the Arduino
-        arduino_baud_rate: Baud rate for the Arduino
-        other_port: COM port for the regeneration device
-        other_baud_rate: Baud rate for the regeneration device
-        measure_conductance: Whether to enable conductance measurements (1=enabled, 0=disabled)
-        measure_co2: Whether to enable CO2/temp/humidity measurements (1=enabled, 0=disabled)
-        measure_regen: Whether to enable regeneration/temp measurements (1=enabled, 0=disabled)
+        arduino_port: Port COM pour l'Arduino
+        arduino_baud_rate: Débit en bauds pour l'Arduino
+        other_port: Port COM pour l'appareil de régénération
+        other_baud_rate: Débit en bauds pour l'appareil de régénération
+        measure_conductance: Activer les mesures de conductance (1=activé, 0=désactivé)
+        measure_co2: Activer les mesures de CO2/température/humidité (1=activé, 0=désactivé)
+        measure_regen: Activer les mesures de régénération/température (1=activé, 0=désactivé)
     """
     
-    # If parameters aren't provided, try to get them from command line
+    # Si les paramètres ne sont pas fournis, essayer de les obtenir depuis la ligne de commande
     if arduino_port is None:
-        # Check for required arguments
+        # Vérifier les arguments requis
         if len(sys.argv) < 5:
             print("Usage: python manual_app.py <arduino_port> <arduino_baud_rate> <other_port> <other_baud_rate> [--measure_conductance 0|1] [--measure_co2 0|1] [--measure_regen 0|1]")
             sys.exit(1)
         
-        # Parse required arguments
+        # Analyser les arguments requis
         arduino_port = sys.argv[1]
         arduino_baud_rate = int(sys.argv[2])
         other_port = sys.argv[3]
@@ -539,6 +539,32 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
     def init_system(event):
         measurements.init_system()
         # La couleur est maintenue automatiquement par le connect_button modifié
+    
+    def start_full_protocol(event):
+        """Handle full protocol button click"""
+        # Only do something if button is active (not already in a protocol)
+        if hasattr(plot_manager.buttons['full_protocol'], 'active') and plot_manager.buttons['full_protocol'].active:
+            try:
+                # Verify all needed measurements are active
+                if not (measure_co2_temp_humidity_active and measure_conductance_active and measure_res_temp_active):
+                    print("Cannot start full protocol: all measurements must be active")
+                    return
+                
+                # Start full protocol
+                success = measurements.start_full_protocol()
+                if success:
+                    # Update the progress bar
+                    plot_manager.update_regeneration_status({
+                        'active': True,
+                        'step': 1,
+                        'message': "Starting full protocol",
+                        'progress': 0
+                    })
+                    print("Full protocol started")
+                else:
+                    print("Failed to start full protocol")
+            except Exception as e:
+                print(f"Error starting full protocol: {e}")
     
     def start_regeneration(event):
         """Handle regeneration button click"""
@@ -1365,6 +1391,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
     plot_manager.connect_button('regeneration', start_regeneration)
     plot_manager.connect_button('cancel_regeneration', cancel_regeneration)
     plot_manager.connect_button('conductance_regen', start_conductance_regen)
+    plot_manager.connect_button('full_protocol', start_full_protocol)
     plot_manager.connect_button('quit', quit_program)
     
     def add_keithley_device(event):
@@ -2050,6 +2077,33 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                         measure_conductance_active,
                         measure_res_temp_active
                     )
+        
+        # Handle full protocol
+        if hasattr(measurements, 'full_protocol_in_progress') and measurements.full_protocol_in_progress:
+            try:
+                full_protocol_status = measurements.manage_full_protocol()
+                plot_manager.update_regeneration_status(full_protocol_status, full_protocol_status.get('results'))
+                
+                # Force completion de protocole s'il atteint 100%
+                if full_protocol_status.get('progress', 0) >= 100:
+                    print("Full protocol completed at 100%")
+                    full_protocol_status['active'] = False
+                    measurements.full_protocol_in_progress = False
+                
+                # Réactiver les boutons de protocole si terminé
+                if not full_protocol_status['active']:
+                    # Re-enable protocol buttons based on measurement conditions
+                    plot_manager.update_protocol_button_states(
+                        measure_co2_temp_humidity_active,
+                        measure_conductance_active,
+                        measure_res_temp_active
+                    )
+                    
+                    # Hide the cancel button
+                    if 'cancel_regeneration' in plot_manager.buttons:
+                        cancel_button = plot_manager.buttons['cancel_regeneration']
+                        cancel_button.ax.set_visible(False)
+                        cancel_button.active = False
                     
                     # Hide the cancel button
                     if 'cancel_regeneration' in plot_manager.buttons:

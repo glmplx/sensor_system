@@ -1,5 +1,5 @@
 """
-Gestionnaire de mesures - Gère la logique de collecte et de traitement des données
+Gestionnaire de mesures - Gère la logique de collecte et de traitement des données des capteurs
 """
 
 import time
@@ -15,7 +15,7 @@ from core.constants import (
 )
 
 class MeasurementManager:
-    """Gère toutes les opérations de mesure et la logique de détection"""
+    """Gère toutes les opérations de mesure et implémente la logique de détection des capteurs"""
     
     def __init__(self, keithley_device, arduino_device, regen_device):
         """
@@ -212,7 +212,7 @@ class MeasurementManager:
             self.last_set_Tcons = last_tcons
     
     def read_conductance(self):
-        """Read conductance data from Keithley"""
+        """Lit les données de conductance depuis l'appareil Keithley"""
         current_time = time.time()
         
         # Vérifier si le Keithley est disponible
@@ -859,6 +859,36 @@ class MeasurementManager:
             
         return False
         
+    def check_conductance_increase_after_decrease(self):
+        """
+        Vérifie si la conductance remonte après être descendue sous 5 µS.
+        Si oui, actualise l'indicateur de début d'augmentation (T perco).
+        
+        Returns: True si une remontée est détectée et l'indicateur actualisé, False sinon
+        """
+        # Ne vérifie que si la conductance a été détectée comme ayant diminué et qu'il y a assez de mesures
+        if not self.conductance_decrease_detected or len(self.conductanceList) < 10:
+            return False
+            
+        # Calcule la pente sur les 10 derniers points pour détecter une augmentation
+        time_window = self.timeList[-10:]
+        conductance_window = self.conductanceList[-10:]
+        slope = np.polyfit(time_window, conductance_window, 1)[0]  # pente en S/s
+        
+        # Vérifie si la pente indique une augmentation significative
+        if INCREASE_SLOPE_MIN <= slope <= INCREASE_SLOPE_MAX:
+            # Actualise l'indicateur de début d'augmentation
+            self.increase_time = self.timeList[-1]
+            self.increase_detected = True
+            self.conductance_decrease_detected = False  # Réinitialise le marqueur de diminution
+            
+            print(f"Temps {self.timeList[-1]/60:.1f} min: Nouvelle augmentation détectée après diminution - Pente = {slope:.2f} µS/s")
+            print(f"Indicateur T perco actualisé à {self.increase_time/60:.1f} min")
+            
+            return True
+            
+        return False
+        
     def detect_post_regen_stability(self):
         """
         Détecte la restabilisation après une chute de conductance post-régénération
@@ -908,10 +938,77 @@ class MeasurementManager:
                 self.set_R0(str(R0))
                 print(f"Auto: R0 updated to {R0}")
                 
-                # Update Tcons to high temperature
+                # Vérifier la stabilité du CO2 avant d'augmenter la température
+                if len(self.values_co2) >= 3:
+                    # Initialisation de la vérification de stabilité
+                    co2_stable = False
+                    co2_stable_start_time = time.time()
+                    co2_reference = self.values_co2[-1]
+                    print(f"Auto: Vérification de la stabilité du CO2 avant régénération (valeur initiale: {co2_reference} ppm)")
+                    
+                    # Boucle de vérification de la stabilité
+                    while not co2_stable:
+                        # Vérifier si de nouvelles données CO2 sont disponibles
+                        self.read_arduino_data()
+                        if len(self.values_co2) > 0:
+                            current_co2 = self.values_co2[-1]
+                            current_time = time.time()
+                            
+                            # Vérifier si le CO2 est stable
+                            if abs(current_co2 - co2_reference) <= CO2_STABILITY_THRESHOLD:
+                                # Stable, vérifier la durée
+                                if current_time - co2_stable_start_time >= CO2_STABILITY_DURATION:
+                                    co2_stable = True
+                                    print(f"Auto: CO2 stable pendant {CO2_STABILITY_DURATION} secondes, lancement chauffage")
+                            else:
+                                # Non stable, réinitialiser la référence
+                                print(f"Auto: CO2 instable, nouvelle référence: {current_co2} ppm")
+                                co2_reference = current_co2
+                                co2_stable_start_time = current_time
+                                
+                        # Petite pause pour éviter de surcharger le processeur
+                        time.sleep(0.5)
+                        
+                        # Vérifier si le temps d'attente est trop long (3 minutes max)
+                        if time.time() - co2_stable_start_time > 3*60 and not co2_stable:
+                            print("Auto: Délai d'attente pour stabilité CO2 dépassé, continuation du processus")
+                            break
+                
+                # Une fois la stabilité CO2 vérifiée, lancer la régénération
+                print("Auto: Démarrage de la régénération - chauffage à haute température")
                 success = self.set_Tcons(str(REGENERATION_TEMP))
                 if not success:
                     print(f"Auto: Erreur lors de la définition de Tcons à {REGENERATION_TEMP}°C")
+                
+                # Ajouter une sécurité pour le temps de régénération
+                regeneration_start_time = time.time()
+                regen_completed = False
+                
+                # Surveiller la conductance pendant la régénération
+                while not regen_completed and (time.time() - regeneration_start_time) < 3*60:
+                    # Lire la conductance actuelle
+                    conductance_data = self.read_conductance()
+                    if conductance_data and len(self.conductanceList) > 0:
+                        current_conductance = self.conductanceList[-1]
+                        
+                        # Vérifier si la conductance est descendue sous 1 µS
+                        if current_conductance <= 5e-6:
+                            print(f"Auto: Régénération terminée - Conductance inférieure à 1 µS ({current_conductance*1e6:.6f} µS)")
+                            regen_completed = True
+                            break
+                    
+                    # Petite pause pour éviter de surcharger le processeur
+                    time.sleep(0.5)
+                
+                # Si le temps maximum de régénération est atteint sans que la conductance ne descende assez
+                if not regen_completed:
+                    print("Auto: Temps maximum de régénération atteint (3 min) - Arrêt forcé")
+                
+                # Dans tous les cas, remettre Tcons à basse température
+                success = self.set_Tcons(str(TCONS_LOW))
+                if not success:
+                    print(f"Auto: Erreur lors de la définition de Tcons à {TCONS_LOW}°C")
+                
             elif R0 is not None and R0 == 1000:
                 print("Error - R0 not detected")
             else:
@@ -920,10 +1017,10 @@ class MeasurementManager:
             return True
             
         # Check if conductance has returned to 0 after stabilization
-        if self.stabilized and len(self.conductanceList) > 0 and self.conductanceList[-1] <= 1e-6:
-            print(f"Auto: Conductance decreased below 1 µS ({self.conductanceList[-1]*1e6:.2f} µS), waiting 5 minutes...")
+        if self.stabilized and len(self.conductanceList) > 0 and self.conductanceList[-1] <= 5e-6:
+            print(f"Auto: Conductance decreased below 1 µS ({self.conductanceList[-1]*1e6:.2f} µS)")
             
-            # Set Tcons to low temperature
+            # Set Tcons to low temperature if not already done
             success = self.set_Tcons(str(TCONS_LOW))
             if not success:
                 print(f"Auto: Erreur lors de la définition de Tcons à {TCONS_LOW}°C")
@@ -1066,6 +1163,12 @@ class MeasurementManager:
             'co2_restabilization_start_time': None,
             'co2_restabilized': None
         }
+        
+        # Arrêter aussi le protocole complet si actif
+        if hasattr(self, 'full_protocol_in_progress') and self.full_protocol_in_progress:
+            self.full_protocol_in_progress = False
+            self.full_protocol_step = 0
+            print("Protocole complet également annulé")
         
         print("Regeneration protocol cancelled")
         return True
@@ -1309,6 +1412,11 @@ class MeasurementManager:
         Returns:
             dict: État actuel du protocole
         """
+        # Vérifier si la conductance remonte après être descendue sous 5µS
+        # Cette vérification est faite indépendamment de l'état du protocole
+        # pour suivre les remontées en mode manuel
+        self.check_conductance_increase_after_decrease()
+        
         if not self.conductance_regen_in_progress:
             return {
                 'active': False,
@@ -1373,6 +1481,397 @@ class MeasurementManager:
             'step': 1,
             'message': f"Chauffage en cours... ({elapsed:.1f}s)",
             'progress': 10  # Valeur de progression arbitraire quand aucune donnée n'est disponible
+        }
+    
+    def start_full_protocol(self):
+        """
+        Démarre le protocole complet, qui combine plusieurs opérations en séquence:
+        1. Rétracte le vérin (ferme)
+        2. Vérifie la stabilité du CO2
+        3. Augmente Tcons à 700°C
+        4. Attend que la conductance descende sous 5µS
+        5. Remet Tcons à 0°C
+        6. Attend la restabilisation du CO2
+        7. Calcule delta C et masse de carbone
+        
+        Ce protocole est particulièrement destiné à être utilisé sur BANCO après un feu.
+        
+        Returns:
+            bool: True si le protocole a démarré, False si déjà en cours
+        """
+        if hasattr(self, 'full_protocol_in_progress') and self.full_protocol_in_progress:
+            print("Protocole complet déjà en cours")
+            return False
+            
+        # Vérifier que tous les dispositifs nécessaires sont disponibles
+        if (self.regen is None or not hasattr(self.regen, 'device') or self.regen.device is None or
+            self.keithley is None or not hasattr(self.keithley, 'device') or self.keithley.device is None or
+            self.arduino is None or not hasattr(self.arduino, 'read_line') or self.arduino.device is None):
+            print("Un ou plusieurs dispositifs nécessaires ne sont pas disponibles")
+            return False
+        
+        # Initialiser les variables du protocole
+        self.full_protocol_in_progress = True
+        self.full_protocol_step = 1  # Étape 1: Rétraction du vérin
+        self.full_protocol_start_time = time.time()
+        self.full_protocol_substep = 0  # Sous-étape pour les opérations complexes
+        self.full_protocol_substep_start_time = None
+        
+        # Valeurs à conserver pour les calculs finaux
+        self.full_protocol_co2_initial = None
+        self.full_protocol_co2_final = None
+        
+        print("Protocole complet démarré - Étape 1: Rétraction du vérin")
+        
+        # Fermer le vérin
+        self.retract_close_sensor()
+        print("Vérin rétracté (fermé)")
+        
+        return True
+    
+    def manage_full_protocol(self):
+        """
+        Gère les différentes étapes du protocole complet.
+        
+        Returns:
+            dict: État actuel du protocole complet
+                'active': bool - True si le protocole est en cours
+                'step': int - Étape actuelle (1-7)
+                'message': str - Message d'état
+                'progress': float - Progression (0-100)
+        """
+        if not hasattr(self, 'full_protocol_in_progress') or not self.full_protocol_in_progress:
+            return {
+                'active': False,
+                'step': 0,
+                'message': "Protocole complet non actif",
+                'progress': 0
+            }
+        
+        current_time = time.time()
+        
+        # Progression globale basée sur l'étape (approximative)
+        progress_per_step = 14.28  # Environ 100/7
+        
+        # Gestion des différentes étapes du protocole
+        if self.full_protocol_step == 1:
+            # Étape 1: Rétraction du vérin (déjà fait dans start_full_protocol)
+            # Attendre un court délai puis passer à l'étape suivante
+            if current_time - self.full_protocol_start_time > VALVE_DELAY:
+                self.full_protocol_step = 2
+                self.full_protocol_substep = 0
+                self.full_protocol_substep_start_time = current_time
+                print("Étape 2: Vérification de la stabilité du CO2")
+            
+            return {
+                'active': True,
+                'step': 1,
+                'message': "Vérin rétracté, préparation...",
+                'progress': progress_per_step
+            }
+        
+        elif self.full_protocol_step == 2:
+            # Étape 2: Vérifier la stabilité du CO2
+            if self.full_protocol_substep == 0:
+                # Initialisation de la vérification
+                self.co2_stable_value = self.values_co2[-1] if len(self.values_co2) > 0 else None
+                self.co2_stability_start_time = current_time
+                self.full_protocol_substep = 1
+                print(f"Démarrage de la vérification de stabilité CO2 - Valeur de référence: {self.co2_stable_value}")
+                
+                # Enregistrer le timestamp du début de la vérification
+                if self.start_time_co2_temp_humidity is not None:
+                    self.regeneration_timestamps['co2_stability_started'] = current_time - self.start_time_co2_temp_humidity - self.elapsed_time_co2_temp_humidity
+            
+            elif self.full_protocol_substep == 1:
+                # Vérification en cours
+                if len(self.values_co2) > 0:
+                    latest_co2 = self.values_co2[-1]
+                    
+                    # Si nous avons une valeur de référence, vérifier la stabilité
+                    if self.co2_stable_value is not None:
+                        if abs(latest_co2 - self.co2_stable_value) <= CO2_STABILITY_THRESHOLD:
+                            # Toujours stable, vérifier la durée
+                            elapsed = current_time - self.co2_stability_start_time
+                            stability_progress = min(100, (elapsed / CO2_STABILITY_DURATION) * 100)
+                            
+                            if elapsed >= CO2_STABILITY_DURATION:
+                                # CO2 stabilisé, passer à l'étape suivante
+                                self.full_protocol_step = 3
+                                self.full_protocol_co2_initial = latest_co2  # Mémoriser la valeur CO2 initiale
+                                print(f"CO2 stable à {latest_co2} ppm, passage à l'étape suivante")
+                                
+                                # Lire et actualiser R0 avant de passer à l'étape de chauffage
+                                R0 = self.read_R0()
+                                if R0 is not None:
+                                    self.set_R0(str(R0))
+                                    print(f"R0 actualisé avant régénération: {R0}")
+                                    
+                                    # Enregistrer le timestamp pour R0 actualisé
+                                    if self.start_time_co2_temp_humidity is not None:
+                                        self.regeneration_timestamps['r0_actualized'] = current_time - self.start_time_co2_temp_humidity - self.elapsed_time_co2_temp_humidity
+                                        
+                                    # Enregistrer le timestamp pour CO2 stabilisé
+                                    if self.start_time_co2_temp_humidity is not None:
+                                        self.regeneration_timestamps['co2_stability_achieved'] = current_time - self.start_time_co2_temp_humidity - self.elapsed_time_co2_temp_humidity
+                            
+                            return {
+                                'active': True,
+                                'step': 2,
+                                'message': f"Vérification stabilité CO2 ({stability_progress:.0f}%)",
+                                'progress': progress_per_step + (stability_progress / 100) * progress_per_step
+                            }
+                        else:
+                            # CO2 a changé, réinitialiser la référence
+                            variation = abs(latest_co2 - self.co2_stable_value)
+                            self.co2_stable_value = latest_co2
+                            self.co2_stability_start_time = current_time
+                            print(f"CO2 instable, nouvelle référence: {latest_co2} ppm (variation de {variation:.2f} ppm)")
+                            
+                            # Mettre à jour le timestamp pour la stabilité CO2
+                            if self.start_time_co2_temp_humidity is not None:
+                                self.regeneration_timestamps['co2_stability_started'] = current_time - self.start_time_co2_temp_humidity - self.elapsed_time_co2_temp_humidity
+                    else:
+                        # Pas de valeur de référence, l'initialiser
+                        self.co2_stable_value = latest_co2
+                        self.co2_stability_start_time = current_time
+                        print(f"Initialisation valeur de référence CO2: {latest_co2} ppm")
+                
+                # Vérifier si le temps d'attente est trop long (3 minutes max)
+                timeout_progress = min(100, ((current_time - self.full_protocol_substep_start_time) / (3*60)) * 100)
+                if current_time - self.full_protocol_substep_start_time > 3*60:
+                    print("Délai d'attente pour stabilité CO2 dépassé, passage à l'étape suivante")
+                    self.full_protocol_step = 3
+                    
+                    # Mémoriser la dernière valeur CO2 comme référence
+                    if len(self.values_co2) > 0:
+                        self.full_protocol_co2_initial = self.values_co2[-1]
+                
+                return {
+                    'active': True,
+                    'step': 2,
+                    'message': f"Vérification stabilité CO2... (timeout: {timeout_progress:.0f}%)",
+                    'progress': progress_per_step + (timeout_progress / 100) * progress_per_step
+                }
+        
+        elif self.full_protocol_step == 3:
+            # Étape 3: Augmenter Tcons à haute température (REGENERATION_TEMP = 700°C)
+            if self.full_protocol_substep == 0:
+                # Démarrer le chauffage
+                success = self.set_Tcons(str(REGENERATION_TEMP))
+                if success:
+                    print(f"Chauffage démarré à {REGENERATION_TEMP}°C")
+                    self.full_protocol_substep = 1
+                    self.full_protocol_substep_start_time = current_time
+                else:
+                    print(f"Erreur lors du démarrage du chauffage à {REGENERATION_TEMP}°C")
+                    # Annuler le protocole en cas d'erreur
+                    self.cancel_regeneration_protocol()
+                    return {
+                        'active': False,
+                        'step': 0,
+                        'message': "Erreur lors du démarrage du chauffage",
+                        'progress': 0
+                    }
+            
+            elif self.full_protocol_substep == 1:
+                # Chauffage en cours, attendre que la conductance descende sous 5µS
+                if len(self.conductanceList) > 0:
+                    current_conductance = self.conductanceList[-1]
+                    
+                    # Afficher la conductance actuelle
+                    print(f"Conductance actuelle: {current_conductance*1e6:.2f} µS")
+                    
+                    if current_conductance <= 5e-6:  # 5 µS (même seuil que dans automatic_mode_handler)
+                        print(f"Conductance descendue sous 1 µS ({current_conductance*1e6:.6f} µS), passage à l'étape suivante")
+                        self.full_protocol_step = 4
+                        self.full_protocol_substep = 0
+                        self.full_protocol_substep_start_time = current_time
+                    elif current_conductance < 5e-6:  # 5 µS
+                        print(f"Conductance descendue sous 5 µS ({current_conductance*1e6:.2f} µS), passage à l'étape suivante")
+                        self.full_protocol_step = 4
+                        self.full_protocol_substep = 0
+                        self.full_protocol_substep_start_time = current_time
+                    elif current_time - self.full_protocol_substep_start_time > 3*60:
+                        # Sécurité: après 3 minutes, passer à l'étape suivante même si la conductance n'est pas assez basse
+                        print(f"Délai de 3 minutes écoulé, sécurité activée - passage à l'étape suivante (conductance: {current_conductance*1e6:.2f} µS)")
+                        self.full_protocol_step = 4
+                        self.full_protocol_substep = 0
+                        self.full_protocol_substep_start_time = current_time
+                        print(f"Sécurité : mise de Tcons à {TCONS_LOW}°C car conductance > 1 µS après 3 minutes")
+                
+                # Calculer la progression basée sur le temps écoulé (max 3 minutes)
+                elapsed = current_time - self.full_protocol_substep_start_time
+                heat_progress = min(100, (elapsed / (3*60)) * 100)
+                
+                return {
+                    'active': True,
+                    'step': 3,
+                    'message': f"Chauffage en cours ({heat_progress:.0f}%)",
+                    'progress': progress_per_step * 3 + (heat_progress / 100) * progress_per_step
+                }
+        
+        elif self.full_protocol_step == 4:
+            # Étape 4: Mettre Tcons à basse température (TCONS_LOW = 0°C)
+            if self.full_protocol_substep == 0:
+                # Abaisser la température
+                success = self.set_Tcons(str(TCONS_LOW))
+                if success:
+                    print(f"Température abaissée à {TCONS_LOW}°C")
+                    self.full_protocol_substep = 1
+                    self.full_protocol_substep_start_time = current_time
+                else:
+                    print(f"Erreur lors de l'abaissement de la température à {TCONS_LOW}°C")
+                    # Continuer malgré l'erreur
+                    self.full_protocol_substep = 1
+                    self.full_protocol_substep_start_time = current_time
+            
+            elif self.full_protocol_substep == 1:
+                # Attendre un court délai puis passer à l'étape suivante
+                if current_time - self.full_protocol_substep_start_time > 5:  # 5 secondes
+                    self.full_protocol_step = 5
+                    self.full_protocol_substep = 0
+                    self.full_protocol_substep_start_time = current_time
+                    print("Passage à l'étape de surveillance de restabilisation du CO2")
+                
+                return {
+                    'active': True,
+                    'step': 4,
+                    'message': "Température abaissée, préparation de l'étape suivante",
+                    'progress': progress_per_step * 4
+                }
+        
+        elif self.full_protocol_step == 5:
+            # Étape 5: Attendre la restabilisation du CO2
+            if self.full_protocol_substep == 0:
+                # Initialisation de la surveillance de restabilisation
+                if len(self.values_co2) > 0:
+                    self.co2_restabilization_reference = self.values_co2[-1]
+                    self.co2_restabilization_start_time = current_time
+                    self.full_protocol_substep = 1
+                    print(f"Début de la surveillance de restabilisation du CO2 à {self.co2_restabilization_reference} ppm")
+                    
+                    # Enregistrer le timestamp pour le début de la surveillance
+                    if self.start_time_co2_temp_humidity is not None:
+                        self.regeneration_timestamps['co2_restabilization_start_time'] = current_time - self.start_time_co2_temp_humidity - self.elapsed_time_co2_temp_humidity
+                else:
+                    return {
+                        'active': True,
+                        'step': 5,
+                        'message': "En attente de données CO2 pour la restabilisation",
+                        'progress': progress_per_step * 5
+                    }
+            
+            elif self.full_protocol_substep == 1:
+                # Vérification de la restabilisation
+                if len(self.values_co2) > 0:
+                    latest_co2 = self.values_co2[-1]
+                    
+                    if abs(latest_co2 - self.co2_restabilization_reference) <= CO2_STABILITY_THRESHOLD:
+                        # CO2 stable, vérifier la durée
+                        elapsed = current_time - self.co2_restabilization_start_time
+                        stability_progress = min(100, (elapsed / CO2_STABILITY_DURATION) * 100)
+                        
+                        if elapsed >= CO2_STABILITY_DURATION:
+                            # CO2 restabilisé, passer à l'étape suivante
+                            self.full_protocol_step = 6
+                            self.full_protocol_co2_final = latest_co2  # Mémoriser la valeur CO2 finale
+                            self.co2_restabilized = True
+                            print(f"CO2 restabilisé à {latest_co2} ppm, passage à l'étape finale")
+                            
+                            # Enregistrer le timestamp pour CO2 restabilisé
+                            if self.start_time_co2_temp_humidity is not None:
+                                self.regeneration_timestamps['co2_restabilized'] = current_time - self.start_time_co2_temp_humidity - self.elapsed_time_co2_temp_humidity
+                        
+                        return {
+                            'active': True,
+                            'step': 5,
+                            'message': f"Surveillance restabilisation CO2 ({stability_progress:.0f}%)",
+                            'progress': progress_per_step * 5 + (stability_progress / 100) * progress_per_step
+                        }
+                    else:
+                        # CO2 a changé, réinitialiser la référence
+                        variation = abs(latest_co2 - self.co2_restabilization_reference)
+                        self.co2_restabilization_reference = latest_co2
+                        self.co2_restabilization_start_time = current_time
+                        print(f"CO2 instable, nouvelle référence: {latest_co2} ppm (variation de {variation:.2f} ppm)")
+                        
+                        # Mettre à jour le timestamp pour le début de la recherche de restabilisation
+                        if self.start_time_co2_temp_humidity is not None:
+                            self.regeneration_timestamps['co2_restabilization_start_time'] = current_time - self.start_time_co2_temp_humidity - self.elapsed_time_co2_temp_humidity
+                
+                # Vérifier si le temps d'attente est trop long (5 minutes max)
+                timeout_progress = min(100, ((current_time - self.full_protocol_substep_start_time) / (5*60)) * 100)
+                if current_time - self.full_protocol_substep_start_time > 5*60:
+                    print("Délai d'attente pour restabilisation CO2 dépassé, passage à l'étape finale")
+                    self.full_protocol_step = 6
+                    
+                    # Mémoriser la dernière valeur CO2 comme valeur finale
+                    if len(self.values_co2) > 0:
+                        self.full_protocol_co2_final = self.values_co2[-1]
+                        
+                        # Forcer l'état restabilisé pour le calcul des résultats
+                        self.co2_restabilized = True
+                
+                return {
+                    'active': True,
+                    'step': 5,
+                    'message': f"Surveillance restabilisation CO2... (timeout: {timeout_progress:.0f}%)",
+                    'progress': progress_per_step * 5 + (timeout_progress / 100) * progress_per_step
+                }
+        
+        elif self.full_protocol_step == 6:
+            # Étape 6: Calcul des résultats et fin du protocole
+            from core.constants import CELL_VOLUME
+            
+            # Calcul du delta C et de la masse de carbone
+            delta_c = 0
+            carbon_mass = 0
+            
+            if self.full_protocol_co2_initial is not None and self.full_protocol_co2_final is not None:
+                # Calculer la différence entre la valeur stable initiale et la valeur finale
+                delta_c = self.full_protocol_co2_final - self.full_protocol_co2_initial
+                
+                # Calculer la masse de carbone en µg: mc = deltaC * volume / 24.5 * 12
+                carbon_mass = delta_c * CELL_VOLUME / 24.5 * 12
+                
+                print(f"Delta C: {delta_c:.2f} ppm")
+                print(f"Masse de carbone: {carbon_mass:.2f} µg")
+            
+            # Le temps de percolation est simplement le moment où l'augmentation commence
+            percolation_time = 0
+            if self.increase_time is not None:
+                percolation_time = self.increase_time
+                print(f"Temps de percolation: {percolation_time:.1f} s")
+            
+            # Stocker les résultats pour l'affichage
+            self.regeneration_results = {
+                'delta_c': delta_c,
+                'carbon_mass': carbon_mass,
+                'percolation_time': percolation_time
+            }
+            
+            # Fin du protocole
+            self.full_protocol_in_progress = False
+            self.full_protocol_step = 0
+            print("Protocole complet terminé avec succès")
+            
+            return {
+                'active': False,
+                'step': 0,
+                'message': "Protocole complet terminé",
+                'progress': 100,
+                'results': self.regeneration_results
+            }
+        
+        # Si on arrive ici, c'est une étape inconnue, réinitialiser le protocole
+        self.full_protocol_in_progress = False
+        self.full_protocol_step = 0
+        return {
+            'active': False,
+            'step': 0,
+            'message': "Protocole interrompu (étape inconnue)",
+            'progress': 0
         }
     
     def manage_regeneration_protocol(self):

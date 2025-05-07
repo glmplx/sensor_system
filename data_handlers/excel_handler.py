@@ -1,5 +1,6 @@
 """
-Gestionnaire de fichiers Excel pour le stockage des données
+Gestionnaire de fichiers Excel pour le stockage et l'exportation des données de mesure.
+Permet l'organisation, la sauvegarde et la visualisation des données sous forme de graphiques.
 """
 
 import os
@@ -10,12 +11,12 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.chart import LineChart, Reference
 from openpyxl.chart.axis import DateAxis
 
-# Ajout du répertoire parent au path pour résoudre les importations
+# Ajout du répertoire parent au chemin d'importation pour résoudre les dépendances
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.constants import EXCEL_BASE_DIR
 
 class ExcelHandler:
-    """Gère les opérations de fichiers Excel pour le stockage des données"""
+    """Gère les opérations de fichiers Excel pour le stockage, l'organisation et la visualisation des données de mesure"""
     
     def __init__(self, mode="manual"):
         """
@@ -35,7 +36,7 @@ class ExcelHandler:
         self.co2_temp_humidity_series_count = 0 
         self.temp_res_series_count = 0
         
-        # Stores accumulated data between RAZ sessions
+        # Stocke les données accumulées entre les sessions de réinitialisation (RAZ)
         self.accumulated_conductance_data = {
             'Minutes': [],
             'Temps (s)': [],
@@ -62,22 +63,22 @@ class ExcelHandler:
     
     def initialize_folder(self):
         """
-        Initialize the test folder based on the current date and time
+        Initialise le dossier de test basé sur la date et l'heure actuelles
         
         Returns:
-            str: Path to the test folder
+            str: Chemin vers le dossier de test créé
         """
-        # Get the directory where the application is running from
+        # Récupérer le répertoire d'exécution de l'application
         if getattr(sys, 'frozen', False):
-            # Running as executable
+            # Exécution en tant qu'exécutable compilé
             application_path = os.path.dirname(sys.executable)
         else:
-            # Running as script
+            # Exécution en tant que script Python
             application_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             
         excel_folder_path = os.path.join(application_path, EXCEL_BASE_DIR)
         
-        # Try application folder first (where the executable is located)
+        # Essayer d'abord le dossier de l'application (où se trouve l'exécutable)
         try:
             if not os.path.exists(excel_folder_path):
                 os.makedirs(excel_folder_path, exist_ok=True)
@@ -120,21 +121,21 @@ class ExcelHandler:
     
     def initialize_file(self, file_type):
         """
-        Initialize an Excel file for a specific data type
+        Initialise un fichier Excel pour un type de données spécifique
         
         Args:
-            file_type: Type of data file to initialize
+            file_type: Type de fichier de données à initialiser ('conductance', 'co2_temp_humidity', 'temp_res')
             
         Returns:
-            str: Path to the initialized file
+            str: Chemin vers le fichier initialisé
         """
         if not self.test_folder_path:
             self.initialize_folder()
         
-        # Get current date and time for filename
+        # Obtenir la date et l'heure actuelles pour le nom du fichier
         current_datetime = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         
-        # Create the appropriate file based on the type
+        # Créer le fichier approprié en fonction du type
         if file_type == "conductance":
             self.conductance_file = os.path.join(self.test_folder_path, f'conductance_{current_datetime}.xlsx')
             return self._create_workbook_with_info(self.conductance_file, file_type)
@@ -359,13 +360,16 @@ class ExcelHandler:
     
     def save_conductance_data(self, timeList, conductanceList, resistanceList, sheet_name=None):
         """
-        Sauvegarde les données de conductance
+        Sauvegarde les données de conductance dans le fichier Excel
         
         Args:
-            timeList: Liste des timestamps
-            conductanceList: Liste des valeurs de conductance
-            resistanceList: Liste des valeurs de résistance
+            timeList: Liste des timestamps (en secondes)
+            conductanceList: Liste des valeurs de conductance (en µS)
+            resistanceList: Liste des valeurs de résistance (en Ohms)
             sheet_name: Nom de la feuille à utiliser (ou None pour créer un nom basé sur l'horodatage)
+            
+        Returns:
+            bool: True si la sauvegarde a réussi, False sinon
         """
         if not self.conductance_file:
             self.initialize_file("conductance")
@@ -413,18 +417,21 @@ class ExcelHandler:
     
     def save_co2_temp_humidity_data(self, co2_timestamps, co2_values, temp_timestamps, temp_values, humidity_timestamps, humidity_values, delta_c=None, carbon_mass=None, sheet_name=None):
         """
-        Sauvegarde les données CO2/temp/humidity
+        Sauvegarde les données de CO2, température et humidité dans le fichier Excel
         
         Args:
-            co2_timestamps: Liste des timestamps CO2
-            co2_values: Liste des valeurs CO2
-            temp_timestamps: Liste des timestamps température
-            temp_values: Liste des valeurs température
-            humidity_timestamps: Liste des timestamps humidité
-            humidity_values: Liste des valeurs humidité
-            delta_c: Différence de CO2 (optionnel)
-            carbon_mass: Masse de carbone (optionnel) 
+            co2_timestamps: Liste des timestamps CO2 (en secondes)
+            co2_values: Liste des valeurs CO2 (en ppm)
+            temp_timestamps: Liste des timestamps température (en secondes)
+            temp_values: Liste des valeurs température (en °C)
+            humidity_timestamps: Liste des timestamps humidité (en secondes)
+            humidity_values: Liste des valeurs humidité (en %)
+            delta_c: Différence de CO2 entre début et fin (en ppm, optionnel)
+            carbon_mass: Masse de carbone calculée (en µg, optionnel)
             sheet_name: Nom de la feuille à utiliser (ou None pour créer un nom basé sur l'horodatage)
+            
+        Returns:
+            bool: True si la sauvegarde a réussi, False sinon
         """
         if not self.co2_temp_humidity_file:
             self.initialize_file("co2_temp_humidity")

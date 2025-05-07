@@ -1,5 +1,5 @@
 """
-Plot manager for the sensor system UI
+Gestionnaire de graphiques pour l'interface utilisateur du système de capteurs
 """
 
 import sys
@@ -8,14 +8,14 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Button, TextBox, RadioButtons
 
 class PlotManager:
-    """Gère les graphiques matplotlib et les éléments UI"""
+    """Gère les graphiques matplotlib et les éléments d'interface utilisateur"""
     
     def __init__(self, mode="manual"):
         """
-        Initialize the plot manager
+        Initialise le gestionnaire de graphiques
         
         Args:
-            mode: "manual" or "auto" mode
+            mode: Mode "manual" ou "auto"
         """
         # Désactiver la barre d'outils de navigation avant de créer les figures
         plt.rcParams['toolbar'] = 'None'
@@ -53,7 +53,7 @@ class PlotManager:
         self.setup_plots()
     
     def setup_plots(self):
-        """Set up the figure and axes for plots"""
+        """Configure la figure et les axes pour les graphiques"""
         # Créer une figure sans barre d'outils en utilisant le paramètre 'toolbar=None'
         self.fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(14, 18))
         
@@ -169,7 +169,7 @@ class PlotManager:
         self.setup_common_elements()
     
     def setup_manual_buttons(self):
-        """Set up buttons for manual mode"""
+        """Configure les boutons pour le mode manuel"""
         button_width = 0.1
         button_height = 0.04
         
@@ -238,14 +238,28 @@ class PlotManager:
         cond_regen_button.active = True  # Activé par défaut
         self.buttons['conductance_regen'] = cond_regen_button
         
-        # Bouton d'annulation de régénération (initialement caché) - à droite du bouton protocole conductance
-        ax_button_cancel_regen = plt.axes([protocol_x2 + protocol_button_width2 + 0.03, protocol_y, button_width * 0.7, button_height])
+        # Bouton d'annulation de régénération (initialement caché) - au-dessus des boutons protocole
+        cancel_x = protocol_x + protocol_button_width
+        cancel_y = protocol_y + button_height + 0.03  # Au-dessus des boutons protocole
+        ax_button_cancel_regen = plt.axes([cancel_x, cancel_y, button_width * 0.7, button_height])
         cancel_regen_button = Button(ax_button_cancel_regen, 'Cancel', color='orange')
         cancel_regen_button.ax.set_facecolor('orange')
         cancel_regen_button.color = 'orange'
         cancel_regen_button.label.set_color('black')
         cancel_regen_button.ax.set_visible(False)  # Initialement caché
         self.buttons['cancel_regeneration'] = cancel_regen_button
+        
+        # Bouton pour le protocole complet (conductance, co2, température)
+        protocol_x3 = protocol_x2 + protocol_button_width2 + 0.03  # À droite du bouton protocole conductance
+        protocol_button_width3 = protocol_button_width2  # Même largeur que le bouton protocole conductance
+        ax_button_complet = plt.axes([protocol_x3, protocol_y, protocol_button_width3, button_height])
+        complet_button = Button(ax_button_complet, 'Protocole Complet', color='darkgreen')
+        # Initialement désactivé comme les autres boutons protocole
+        complet_button.ax.set_facecolor('lightgray')
+        complet_button.color = 'lightgray'
+        complet_button.label.set_color('darkgray')
+        complet_button.active = False  # Désactivé par défaut
+        self.buttons['protocole_complet'] = complet_button
         
         # Tcons input and button - déplacés vers la droite en vertical et encore plus bas
         spacing = 0.04  # Espacement vertical
@@ -265,7 +279,7 @@ class PlotManager:
         self.buttons['set_Tcons'].active = True  # Définir active=True par défaut
     
     def setup_auto_buttons(self):
-        """Set up buttons for auto mode"""
+        """Configure les boutons pour le mode automatique"""
         button_width = 0.1
         button_height = 0.04
         
@@ -305,17 +319,31 @@ class PlotManager:
         cond_regen_button.active = True  # Activé par défaut
         self.buttons['conductance_regen'] = cond_regen_button
         
-        # Bouton d'annulation de régénération (initialement caché) - à droite du bouton protocole conductance
-        ax_button_cancel_regen = plt.axes([protocol_x2 + protocol_button_width2 + 0.03, protocol_y, button_width * 0.7, button_height])
+        # Bouton d'annulation de régénération (initialement caché) - au-dessus des boutons protocole
+        cancel_x = protocol_x + protocol_button_width
+        cancel_y = protocol_y + button_height + 0.03  # Au-dessus des boutons protocole
+        ax_button_cancel_regen = plt.axes([cancel_x, cancel_y, button_width * 0.7, button_height])
         cancel_regen_button = Button(ax_button_cancel_regen, 'Cancel', color='orange')
         cancel_regen_button.ax.set_facecolor('orange')
         cancel_regen_button.color = 'orange'
         cancel_regen_button.label.set_color('black')
         cancel_regen_button.ax.set_visible(False)  # Initialement caché
         self.buttons['cancel_regeneration'] = cancel_regen_button
+        
+        # Bouton pour le protocole complet (conductance, co2, température)
+        protocol_x3 = protocol_x2 + protocol_button_width2 + 0.03  # À droite du bouton protocole conductance
+        protocol_button_width3 = protocol_button_width2  # Même largeur que le bouton protocole conductance
+        ax_button_complet = plt.axes([protocol_x3, protocol_y, protocol_button_width3, button_height])
+        complet_button = Button(ax_button_complet, 'Protocole Complet', color='darkgreen')
+        # Initialement désactivé comme les autres boutons protocole
+        complet_button.ax.set_facecolor('lightgray')
+        complet_button.color = 'lightgray'
+        complet_button.label.set_color('darkgray')
+        complet_button.active = False  # Désactivé par défaut
+        self.buttons['protocole_complet'] = complet_button
     
     def setup_common_elements(self):
-        """Set up elements common to both modes"""
+        """Configure les éléments communs aux deux modes"""
         button_width = 0.1
         button_height = 0.04
         
@@ -416,7 +444,7 @@ class PlotManager:
         self.buttons['init'] = init_button
         
     def setup_add_device_buttons(self):
-        """Configuration des boutons pour ajouter des appareils pendant l'exécution"""
+        """Configure les boutons pour ajouter des appareils pendant l'exécution"""
         button_width = 0.1
         button_height = 0.03
         
@@ -456,7 +484,7 @@ class PlotManager:
             button.ax.set_visible(False)
     
     def setup_indicators(self):
-        """Set up status indicators"""
+        """Configure les indicateurs d'état"""
         # Les indicateurs d'augmentation et de stabilisation sont maintenant des lignes verticales
         # sur le graphique et non plus des voyants LED
         
@@ -498,15 +526,15 @@ class PlotManager:
     
     def connect_button(self, button_name, callback):
         """
-        Connect a button to a callback function
+        Connecte un bouton à une fonction de rappel
         
         Args:
-            button_name: Name of the button to connect
-            callback: Function to call when the button is clicked
+            button_name: Nom du bouton à connecter
+            callback: Fonction à appeler lorsque le bouton est cliqué
         """
         if button_name in self.buttons:
-            # Pour les boutons qui peuvent être désactivés (push_open, retract_close, co2_temp_humidity, res_temp, etc.)
-            if button_name in ['push_open', 'retract_close', 'co2_temp_humidity', 'res_temp', 'set_Tcons']:
+            # Pour les boutons qui peuvent être désactivés (push_open, retract_close, co2_temp_humidity, res_temp, protocole_complet, etc.)
+            if button_name in ['push_open', 'retract_close', 'co2_temp_humidity', 'res_temp', 'set_Tcons', 'protocole_complet']:
                 
                 def wrapped_disabled_callback(event):
                     # Ne rien faire si le bouton est désactivé
@@ -550,38 +578,38 @@ class PlotManager:
     
     def connect_textbox(self, textbox_name, callback):
         """
-        Connect a textbox to a callback function
+        Connecte un champ de texte à une fonction de rappel
         
         Args:
-            textbox_name: Name of the textbox to connect
-            callback: Function to call when the textbox is submitted
+            textbox_name: Nom du champ de texte à connecter
+            callback: Fonction à appeler lorsque le champ de texte est soumis
         """
         if textbox_name in self.textboxes:
             self.textboxes[textbox_name].on_submit(callback)
             
     def connect_radiobutton(self, radiobutton_name, callback):
         """
-        Connect a radio button to a callback function
+        Connecte un bouton radio à une fonction de rappel
         
         Args:
-            radiobutton_name: Name of the radio button to connect
-            callback: Function to call when the radio button selection changes
+            radiobutton_name: Nom du bouton radio à connecter
+            callback: Fonction à appeler lorsque la sélection du bouton radio change
         """
         if radiobutton_name in self.radiobuttons:
             self.radiobuttons[radiobutton_name].on_clicked(callback)
     
     def update_indicator(self, indicator_name, state):
         """
-        Update an indicator's state
+        Met à jour l'état d'un indicateur
         
         Args:
-            indicator_name: Name of the indicator to update
-            state: New state for the indicator (True = active, False = inactive)
+            indicator_name: Nom de l'indicateur à mettre à jour
+            state: Nouvel état pour l'indicateur (True = actif, False = inactif)
         """
         if indicator_name in self.indicators:
             indicator = self.indicators[indicator_name]
             if indicator is None:
-                # Skip None indicators (like increase_led and stabilization_led which are now vertical lines)
+                # Ignore les indicateurs None (comme increase_led et stabilization_led qui sont maintenant des lignes verticales)
                 return
             
             if state:
@@ -592,14 +620,14 @@ class PlotManager:
     
     def update_sensor_indicators(self, pin_states=None):
         """
-        Update sensor indicators based on individual pin states
+        Met à jour les indicateurs de capteurs en fonction des états individuels des broches
         
         Args:
-            pin_states: Dictionary with states of VR, VS, TO, TF pins
+            pin_states: Dictionnaire avec les états des broches VR, VS, TO, TF
                        {'vr': bool, 'vs': bool, 'to': bool, 'tf': bool}
         """
         if pin_states is None:
-            # Unknown state - all indicators off
+            # État inconnu - tous les indicateurs éteints
             self.update_indicator('sensor_in_led', False)  # Vérin Rentré
             self.update_indicator('sensor_out_led', False) # Vérin Sorti
             self.update_indicator('trappe_fermee_led', False)  # Trappe Fermée
@@ -629,12 +657,12 @@ class PlotManager:
     
     def update_detection_indicators(self, increase_detected, stabilized):
         """
-        Update detection indicators - now using vertical dotted lines in the conductance plot
-        instead of LED indicators
+        Met à jour les indicateurs de détection - utilise maintenant des lignes verticales pointillées 
+        dans le graphique de conductance au lieu des indicateurs LED
         
         Args:
-            increase_detected: Whether an increase in conductance has been detected
-            stabilized: Whether the conductance has stabilized
+            increase_detected: Si une augmentation de conductance a été détectée
+            stabilized: Si la conductance s'est stabilisée
         """
         # Les changements de détection sont maintenant gérés par les lignes verticales
         # dans update_conductance_plot à travers le dictionnaire events
@@ -643,16 +671,16 @@ class PlotManager:
         
     def reset_reference_restabilization(self):
         """
-        Reset the reference restabilization time to use the next detected restabilization
+        Réinitialise le temps de référence de restabilisation pour utiliser la prochaine restabilisation détectée
         """
         self.reference_restabilization_time = None
     
     def update_R0_display(self, value):
         """
-        Update the R0 display
+        Met à jour l'affichage de R0
         
         Args:
-            value: Value to display
+            value: Valeur à afficher
         """
         ax_label = self.indicators['R0_display']
         ax_label.clear()
@@ -661,17 +689,17 @@ class PlotManager:
         
     def update_regeneration_status(self, status, results=None):
         """
-        Update the regeneration button status based on regeneration progress
+        Met à jour l'état du bouton de régénération en fonction de la progression de la régénération
         
         Args:
-            status: Dictionary containing status of regeneration protocol
-                'active': bool - True if regeneration is in progress
-                'step': int - Current step (0-3)
-                'message': str - Status message
-                'progress': float - Progress percentage (0-100)
-            results: Optional dictionary containing regeneration results
-                'delta_c': float - Delta C between initial and final stabilization
-                'carbon_mass': float - Calculated carbon mass in µg
+            status: Dictionnaire contenant l'état du protocole de régénération
+                'active': bool - True si la régénération est en cours
+                'step': int - Étape actuelle (0-3)
+                'message': str - Message d'état
+                'progress': float - Pourcentage de progression (0-100)
+            results: Dictionnaire optionnel contenant les résultats de la régénération
+                'delta_c': float - Delta C entre la stabilisation initiale et finale
+                'carbon_mass': float - Masse de carbone calculée en µg
         """
         if 'regeneration' not in self.buttons:
             return
@@ -749,12 +777,12 @@ class PlotManager:
     
     def update_conductance_plot(self, timeList, conductanceList, events=None):
         """
-        Update the conductance plot
+        Met à jour le graphique de conductance
         
         Args:
-            timeList: List of time values
-            conductanceList: List of conductance values
-            events: Dictionary of events to mark on the plot
+            timeList: Liste des valeurs de temps
+            conductanceList: Liste des valeurs de conductance
+            events: Dictionnaire des événements à marquer sur le graphique
         """
         ax = self.axes['conductance']
         ax.clear()
@@ -809,16 +837,16 @@ class PlotManager:
     def update_co2_temp_humidity_plot(self, timestamps_co2, values_co2, timestamps_temp, values_temp, 
                                     timestamps_humidity, values_humidity, regeneration_timestamps=None):
         """
-        Update the CO2, temperature and humidity plot
+        Met à jour le graphique de CO2, température et humidité
         
         Args:
-            timestamps_co2: List of CO2 timestamps
-            values_co2: List of CO2 values
-            timestamps_temp: List of temperature timestamps
-            values_temp: List of temperature values
-            timestamps_humidity: List of humidity timestamps
-            values_humidity: List of humidity values
-            regeneration_timestamps: Dictionary of timestamps for key events in the regeneration protocol
+            timestamps_co2: Liste des horodatages CO2
+            values_co2: Liste des valeurs de CO2
+            timestamps_temp: Liste des horodatages de température
+            values_temp: Liste des valeurs de température
+            timestamps_humidity: Liste des horodatages d'humidité
+            values_humidity: Liste des valeurs d'humidité
+            regeneration_timestamps: Dictionnaire des horodatages pour les événements clés du protocole de régénération
         """
         ax = self.axes['co2']
         ax_right = self.axes['co2_right']
@@ -897,13 +925,13 @@ class PlotManager:
     
     def update_res_temp_plot(self, timestamps, temperatures, tcons_values, regeneration_timestamps=None):
         """
-        Update the resistance temperature plot
+        Met à jour le graphique de température de résistance
         
         Args:
-            timestamps: List of timestamps
-            temperatures: List of temperature values
-            tcons_values: List of Tcons values
-            regeneration_timestamps: Dictionary of timestamps for key events in the regeneration protocol
+            timestamps: Liste des horodatages
+            temperatures: Liste des valeurs de température
+            tcons_values: Liste des valeurs de Tcons
+            regeneration_timestamps: Dictionnaire des horodatages pour les événements clés du protocole de régénération
         """
         ax = self.axes['res_temp']
         ax.clear()
@@ -943,10 +971,10 @@ class PlotManager:
     
     def update_raz_buttons_visibility(self, measurement_states):
         """
-        Update visibility of reset buttons based on measurement states
+        Met à jour la visibilité des boutons de réinitialisation en fonction des états de mesure
         
         Args:
-            measurement_states: Dictionary with measurement states
+            measurement_states: Dictionnaire avec les états de mesure
         """
         if self.mode == "manual":
             for measurement, state in measurement_states.items():
@@ -1002,12 +1030,12 @@ class PlotManager:
     
     def configure_measurement_panels(self, measure_conductance=True, measure_co2=True, measure_regen=True):
         """
-        Configure which measurement panels are visible and reorganize the layout
+        Configure les panneaux de mesure visibles et réorganise la mise en page
         
         Args:
-            measure_conductance: Whether to show conductance panel
-            measure_co2: Whether to show CO2/temp/humidity panel
-            measure_regen: Whether to show regeneration temperature panel
+            measure_conductance: Si le panneau de conductance doit être affiché
+            measure_co2: Si le panneau CO2/temp/humidité doit être affiché
+            measure_regen: Si le panneau de température de régénération doit être affiché
         """
         # Approche plus simple: ajuster la position relative des panneaux
         # sans recréer la figure complète
@@ -1108,10 +1136,10 @@ class PlotManager:
     
     def on_time_unit_change(self, label):
         """
-        Handle change in time unit display (seconds/minutes)
+        Gère le changement d'affichage des unités de temps (secondes/minutes)
         
         Args:
-            label: Selected radio button label
+            label: Étiquette du bouton radio sélectionné
         """
         if label == 'Minutes':
             self.display_minutes = True
@@ -1159,11 +1187,11 @@ class PlotManager:
         self.fig.canvas.draw_idle()
     
     def close(self):
-        """Close the plot window"""
+        """Ferme la fenêtre du graphique"""
         plt.close(self.fig)
     
     def show(self):
-        """Show the plot window"""
+        """Affiche la fenêtre du graphique"""
         plt.show()
         
     def update_add_device_buttons(self, available_devices=None):
@@ -1223,7 +1251,7 @@ class PlotManager:
         Connecte un callback au bouton d'ajout d'appareil
         
         Args:
-            device_type: Type d'appareil ('arduino' ou 'regen')
+            device_type: Type d'appareil ('arduino', 'regen' ou 'keithley')
             callback: Fonction à appeler lorsque le bouton est cliqué
         """
         if device_type in self.add_device_buttons:
@@ -1243,14 +1271,15 @@ class PlotManager:
             
     def update_protocol_button_states(self, measure_co2_temp_humidity_active, measure_conductance_active, measure_res_temp_active):
         """
-        Update the protocol buttons state based on active measurements
-        - CO2 protocol button should be clickable if CO2 and Tcons/Tmes are active
-        - Conductance protocol button should be clickable if Conductance and Tcons/Tmes are active
+        Met à jour l'état des boutons de protocole en fonction des mesures actives
+        - Le bouton de protocole CO2 doit être cliquable si CO2 et Tcons/Tmes sont actifs
+        - Le bouton de protocole de conductance doit être cliquable si Conductance et Tcons/Tmes sont actifs
+        - Le bouton de protocole complet doit être cliquable si les trois mesures sont actives
         
         Args:
-            measure_co2_temp_humidity_active: Whether CO2/temperature/humidity measurement is active
-            measure_conductance_active: Whether conductance measurement is active
-            measure_res_temp_active: Whether resistance/temperature measurement is active
+            measure_co2_temp_humidity_active: Si la mesure de CO2/température/humidité est active
+            measure_conductance_active: Si la mesure de conductance est active
+            measure_res_temp_active: Si la mesure de résistance/température est active
         """
         # Protocole CO2 button - clickable if CO2 and Temp active
         if measure_co2_temp_humidity_active and measure_res_temp_active:
@@ -1279,20 +1308,35 @@ class PlotManager:
             self.buttons['conductance_regen'].color = 'lightgray'
             self.buttons['conductance_regen'].label.set_color('darkgray')
             self.buttons['conductance_regen'].active = False
+        
+        # Protocole Complet button - clickable if all three measurements are active
+        if measure_conductance_active and measure_co2_temp_humidity_active and measure_res_temp_active:
+            # Enable Complete protocol button
+            self.buttons['protocole_complet'].ax.set_facecolor('darkgreen')
+            self.buttons['protocole_complet'].color = 'darkgreen'
+            self.buttons['protocole_complet'].label.set_color('white')
+            self.buttons['protocole_complet'].active = True
+        else:
+            # Disable Complete protocol button
+            self.buttons['protocole_complet'].ax.set_facecolor('lightgray')
+            self.buttons['protocole_complet'].color = 'lightgray'
+            self.buttons['protocole_complet'].label.set_color('darkgray')
+            self.buttons['protocole_complet'].active = False
             
         # Redraw the buttons
         self.fig.canvas.draw_idle()
         
     def update_regeneration_status(self, status_info, regeneration_results=None):
         """
-        Mets à jour l'affichage du statut de régénération/protocole
+        Met à jour l'affichage du statut de régénération/protocole
         
         Args:
-            status_info: Dict contenant les informations de statut
+            status_info: Dictionnaire contenant les informations de statut
                 'active': Bool - Si le protocole est actif
                 'step': Int - Étape courante du protocole
                 'message': Str - Message à afficher
                 'progress': Float - Progression (0-100)
+            regeneration_results: Résultats de régénération (non utilisé dans cette fonction)
         """
         # Mettre à jour l'état de la barre de progression commune
         if 'protocol_progress' in self.indicators:
@@ -1328,12 +1372,12 @@ class PlotManager:
     
     def set_close_callback(self, callback):
         """
-        Configure a callback for when the window is closed via the X button
+        Configure un callback pour quand la fenêtre est fermée via le bouton X
         
         Args:
-            callback: Function to call when the window is closed
+            callback: Fonction à appeler quand la fenêtre est fermée
         """
-        # Get the window manager to connect to its close event
+        # Obtient le gestionnaire de fenêtre pour se connecter à son événement de fermeture
         try:
             if self.fig and self.fig.canvas and self.fig.canvas.manager:
                 manager = self.fig.canvas.manager

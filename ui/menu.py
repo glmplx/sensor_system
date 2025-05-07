@@ -231,6 +231,10 @@ class MenuUI:
         launch_button = tk.Button(button_frame, text="Lancer le programme", command=self.launch_program)
         launch_button.pack(side=tk.LEFT, padx=10)
         
+        # Help button
+        help_button = tk.Button(button_frame, text="Aide", command=self.open_documentation)
+        help_button.pack(side=tk.LEFT, padx=10)
+        
         # Quit button
         quit_button = tk.Button(button_frame, text="Quitter", command=self.quit_application)
         quit_button.pack(side=tk.LEFT, padx=10)
@@ -438,6 +442,24 @@ class MenuUI:
             
             # Utiliser execv pour remplacer le processus actuel (pas de sous-processus)
             os.execv(sys.executable, command)
+    
+    def open_documentation(self):
+        """Ouvre le fichier de documentation"""
+        doc_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "documentation.md")
+        
+        try:
+            # Utiliser la commande appropriée selon le système d'exploitation
+            if sys.platform.startswith('win'):
+                os.startfile(doc_path)
+            elif sys.platform.startswith('darwin'):  # macOS
+                subprocess.call(['open', doc_path])
+            else:  # linux
+                subprocess.call(['xdg-open', doc_path])
+                
+            # Afficher un message de confirmation
+            tk.messagebox.showinfo("Documentation", "Le fichier de documentation a été ouvert.")
+        except Exception as e:
+            tk.messagebox.showerror("Erreur", f"Impossible d'ouvrir la documentation: {e}")
     
     def quit_application(self):
         """Ferme l'application proprement et termine le processus"""
