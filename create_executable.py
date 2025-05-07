@@ -29,37 +29,29 @@ def create_executable():
     main_script_norm = main_script.replace("\\", "/")
     current_dir_norm = current_dir.replace("\\", "/")
     
-    # Write the spec file content
-    # Check which files exist to include them in datas
-    readme_path = os.path.join(current_dir, 'README.md')
-    doc_path = os.path.join(current_dir, 'DOCUMENTATION.md')
-    mkdocs_path = os.path.join(current_dir, 'mkdocs.yml')
-    docs_dir = os.path.join(current_dir, 'docs')
-    
-    datas_str = []
-    if os.path.exists(readme_path):
-        datas_str.append(f"        (r'{readme_path.replace('\\', '\\\\')}', '.')")
-    if os.path.exists(doc_path):
-        datas_str.append(f"        (r'{doc_path.replace('\\', '\\\\')}', '.')")
-    if os.path.exists(mkdocs_path):
-        datas_str.append(f"        (r'{mkdocs_path.replace('\\', '\\\\')}', '.')")
-    if os.path.exists(docs_dir) and os.path.isdir(docs_dir):
-        datas_str.append(f"        (r'{docs_dir.replace('\\', '\\\\')}', 'docs')")
-    
-    datas_content = ',\n'.join(datas_str)
-    
-    with open(spec_file, 'w') as f:
-        f.write(f"""# -*- mode: python ; coding: utf-8 -*-
+    # Write the spec file content using a simpler approach with string concatenation
+    spec_content = """# -*- mode: python ; coding: utf-8 -*-
 
 block_cipher = None
 
 a = Analysis(
-    ['{main_script_norm}'],
-    pathex=['{current_dir_norm}'],
+    ['""" + main_script_norm + """'],
+    pathex=['""" + current_dir_norm + """'],
     binaries=[],
     datas=[
-{datas_content}
-    ],
+"""
+    
+    # Add data files if they exist
+    if os.path.exists(os.path.join(current_dir, 'README.md')):
+        spec_content += "        ('" + os.path.join(current_dir_norm, 'README.md') + "', '.'),\n"
+    if os.path.exists(os.path.join(current_dir, 'DOCUMENTATION.md')):
+        spec_content += "        ('" + os.path.join(current_dir_norm, 'DOCUMENTATION.md') + "', '.'),\n"
+    if os.path.exists(os.path.join(current_dir, 'mkdocs.yml')):
+        spec_content += "        ('" + os.path.join(current_dir_norm, 'mkdocs.yml') + "', '.'),\n"
+    if os.path.exists(os.path.join(current_dir, 'docs')) and os.path.isdir(os.path.join(current_dir, 'docs')):
+        spec_content += "        ('" + os.path.join(current_dir_norm, 'docs') + "', 'docs'),\n"
+    
+    spec_content += """    ],
     hiddenimports=[
         'matplotlib',
         'numpy',
@@ -79,7 +71,7 @@ a = Analysis(
         'PyQt5'
     ],
     hookspath=[],
-    hooksconfig={{}},
+    hooksconfig={},
     runtime_hooks=[],
     excludes=[],
     win_no_prefer_redirects=False,
@@ -112,7 +104,10 @@ exe = EXE(
     entitlements_file=None,
     icon=None,
 )
-""")
+"""
+    
+    with open(spec_file, 'w') as f:
+        f.write(spec_content)
     
     # Execute PyInstaller with the spec file
     print("Creating executable...")
