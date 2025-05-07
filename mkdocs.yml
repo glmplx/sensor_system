@@ -1,0 +1,48 @@
+site_name: Documentation du projet
+site_url: ''
+repo_url: ''
+theme:
+  name: material
+  features:
+  - navigation.tabs
+  - navigation.sections
+  - toc.integrate
+  - search.highlight
+  - content.code.annotate
+  palette:
+  - scheme: default
+    primary: deep purple
+    toggle:
+      icon: material/toggle-switch-off-outline
+      name: Passer en mode sombre
+  - scheme: slate
+    primary: deep purple
+    toggle:
+      icon: material/toggle-switch
+      name: Passer en mode clair
+markdown_extensions:
+- admonition
+- toc
+- toc:
+    permalink: true
+- pymdownx.highlight
+- pymdownx.superfences
+- pymdownx.details
+nav:
+- Accueil: index.md
+- Modules:
+  - auto_app: auto_app.md
+  - create_executable: create_executable.md
+  - create_installer: create_installer.md
+  - doc_maker: doc_maker.md
+  - main: main.md
+  - manual_app: manual_app.md
+  - mkdocs_script: mkdocs_script.md
+  - measurement_manager: measurement_manager.md
+  - excel_handler: excel_handler.md
+  - arduino_device: arduino_device.md
+  - keithley_device: keithley_device.md
+  - regen_device: regen_device.md
+  - menu: menu.md
+  - plot_manager: plot_manager.md
+  - helpers: helpers.md
