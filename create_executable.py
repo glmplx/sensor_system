@@ -30,20 +30,35 @@ def create_executable():
     current_dir_norm = current_dir.replace("\\", "/")
     
     # Write the spec file content
+    # Check which files exist to include them in datas
+    readme_path = os.path.join(current_dir, 'README.md')
+    doc_path = os.path.join(current_dir, 'DOCUMENTATION.md')
+    mkdocs_path = os.path.join(current_dir, 'mkdocs.yml')
+    docs_dir = os.path.join(current_dir, 'docs')
+    
+    datas_str = []
+    if os.path.exists(readme_path):
+        datas_str.append(f"        (r'{readme_path.replace('\\', '\\\\')}', '.')")
+    if os.path.exists(doc_path):
+        datas_str.append(f"        (r'{doc_path.replace('\\', '\\\\')}', '.')")
+    if os.path.exists(mkdocs_path):
+        datas_str.append(f"        (r'{mkdocs_path.replace('\\', '\\\\')}', '.')")
+    if os.path.exists(docs_dir) and os.path.isdir(docs_dir):
+        datas_str.append(f"        (r'{docs_dir.replace('\\', '\\\\')}', 'docs')")
+    
+    datas_content = ',\n'.join(datas_str)
+    
     with open(spec_file, 'w') as f:
-        f.write("""# -*- mode: python ; coding: utf-8 -*-
+        f.write(f"""# -*- mode: python ; coding: utf-8 -*-
 
 block_cipher = None
 
 a = Analysis(
-    ['{}'],
-    pathex=['{}'],
+    ['{main_script_norm}'],
+    pathex=['{current_dir_norm}'],
     binaries=[],
     datas=[
-        ('README.md', '.'),
-        ('DOCUMENTATION.md', '.'),
-        ('mkdocs.yml', '.'),
-        ('docs', 'docs'),  # Include the docs directory if it exists
+{datas_content}
     ],
     hiddenimports=[
         'matplotlib',
@@ -97,7 +112,7 @@ exe = EXE(
     entitlements_file=None,
     icon=None,
 )
-""".format(main_script_norm, current_dir_norm))
+""")
     
     # Execute PyInstaller with the spec file
     print("Creating executable...")
