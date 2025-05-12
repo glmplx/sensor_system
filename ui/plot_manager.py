@@ -207,7 +207,7 @@ class PlotManager:
         # Créer une barre de progression pour les protocoles
         protocol_progress_y = protocol_y + button_height + 0.01  # Juste au-dessus des boutons
         protocol_progress_width = protocol_button_width * 2.25 + 0.03  # Largeur pour couvrir les deux boutons
-        ax_protocol_progress = plt.axes([protocol_x, protocol_progress_y, protocol_progress_width, 0.01])
+        ax_protocol_progress = plt.axes([protocol_x, protocol_progress_y, protocol_progress_width, 0.015])  # Épaisseur augmentée de 0.01 à 0.015
         ax_protocol_progress.set_xticks([])
         ax_protocol_progress.set_yticks([])
         ax_protocol_progress.set_frame_on(True)  # Afficher le cadre
@@ -238,17 +238,6 @@ class PlotManager:
         cond_regen_button.active = True  # Activé par défaut
         self.buttons['conductance_regen'] = cond_regen_button
         
-        # Bouton d'annulation de régénération (initialement caché) - au-dessus des boutons protocole
-        cancel_x = protocol_x + protocol_button_width
-        cancel_y = protocol_y + button_height + 0.03  # Au-dessus des boutons protocole
-        ax_button_cancel_regen = plt.axes([cancel_x, cancel_y, button_width * 0.7, button_height])
-        cancel_regen_button = Button(ax_button_cancel_regen, 'Cancel', color='orange')
-        cancel_regen_button.ax.set_facecolor('orange')
-        cancel_regen_button.color = 'orange'
-        cancel_regen_button.label.set_color('black')
-        cancel_regen_button.ax.set_visible(False)  # Initialement caché
-        self.buttons['cancel_regeneration'] = cancel_regen_button
-        
         # Bouton pour le protocole complet (conductance, co2, température)
         protocol_x3 = protocol_x2 + protocol_button_width2 + 0.03  # À droite du bouton protocole conductance
         protocol_button_width3 = protocol_button_width2  # Même largeur que le bouton protocole conductance
@@ -260,6 +249,17 @@ class PlotManager:
         complet_button.label.set_color('darkgray')
         complet_button.active = False  # Désactivé par défaut
         self.buttons['protocole_complet'] = complet_button
+        
+        # Bouton d'annulation de régénération (initialement caché) - au-dessus du bouton Protocole Complet
+        cancel_x = protocol_x3 + (protocol_button_width3 / 2) - (button_width * 0.35)  # Centré au-dessus du Protocole Complet
+        cancel_y = protocol_y + button_height + 0.03  # Au-dessus des boutons protocole
+        ax_button_cancel_regen = plt.axes([cancel_x, cancel_y, button_width * 0.7, button_height])
+        cancel_regen_button = Button(ax_button_cancel_regen, 'Cancel', color='orange')
+        cancel_regen_button.ax.set_facecolor('orange')
+        cancel_regen_button.color = 'orange'
+        cancel_regen_button.label.set_color('black')
+        cancel_regen_button.ax.set_visible(False)  # Initialement caché
+        self.buttons['cancel_regeneration'] = cancel_regen_button
         
         # Tcons input and button - déplacés vers la droite en vertical et encore plus bas
         spacing = 0.04  # Espacement vertical
@@ -319,17 +319,6 @@ class PlotManager:
         cond_regen_button.active = True  # Activé par défaut
         self.buttons['conductance_regen'] = cond_regen_button
         
-        # Bouton d'annulation de régénération (initialement caché) - au-dessus des boutons protocole
-        cancel_x = protocol_x + protocol_button_width
-        cancel_y = protocol_y + button_height + 0.03  # Au-dessus des boutons protocole
-        ax_button_cancel_regen = plt.axes([cancel_x, cancel_y, button_width * 0.7, button_height])
-        cancel_regen_button = Button(ax_button_cancel_regen, 'Cancel', color='orange')
-        cancel_regen_button.ax.set_facecolor('orange')
-        cancel_regen_button.color = 'orange'
-        cancel_regen_button.label.set_color('black')
-        cancel_regen_button.ax.set_visible(False)  # Initialement caché
-        self.buttons['cancel_regeneration'] = cancel_regen_button
-        
         # Bouton pour le protocole complet (conductance, co2, température)
         protocol_x3 = protocol_x2 + protocol_button_width2 + 0.03  # À droite du bouton protocole conductance
         protocol_button_width3 = protocol_button_width2  # Même largeur que le bouton protocole conductance
@@ -341,6 +330,17 @@ class PlotManager:
         complet_button.label.set_color('darkgray')
         complet_button.active = False  # Désactivé par défaut
         self.buttons['protocole_complet'] = complet_button
+        
+        # Bouton d'annulation de régénération (initialement caché) - au-dessus du bouton Protocole Complet
+        cancel_x = protocol_x3 + (protocol_button_width3 / 2) - (button_width * 0.35)  # Centré au-dessus du Protocole Complet
+        cancel_y = protocol_y + button_height + 0.03  # Au-dessus des boutons protocole
+        ax_button_cancel_regen = plt.axes([cancel_x, cancel_y, button_width * 0.7, button_height])
+        cancel_regen_button = Button(ax_button_cancel_regen, 'Cancel', color='orange')
+        cancel_regen_button.ax.set_facecolor('orange')
+        cancel_regen_button.color = 'orange'
+        cancel_regen_button.label.set_color('black')
+        cancel_regen_button.ax.set_visible(False)  # Initialement caché
+        self.buttons['cancel_regeneration'] = cancel_regen_button
     
     def setup_common_elements(self):
         """Configure les éléments communs aux deux modes"""
@@ -380,14 +380,14 @@ class PlotManager:
         self.buttons['set_R0'] = Button(ax_button_R0, 'Set R0')
         
         # Push/Open and Retract/Close buttons (grayed out initially)
-        ax_button_PushOpen = plt.axes([0.75, 0.01, button_width, button_height])
+        ax_button_PushOpen = plt.axes([0.78, 0.01, button_width, button_height])
         push_open_button = Button(ax_button_PushOpen, 'Push/Open', color='lightgray')
         push_open_button.ax.set_facecolor('lightgray')
         push_open_button.color = 'lightgray'
         push_open_button.active = False  # Custom flag to track if button is usable
         self.buttons['push_open'] = push_open_button
         
-        ax_button_RetractClose = plt.axes([0.75, 0.06, button_width, button_height])
+        ax_button_RetractClose = plt.axes([0.78, 0.06, button_width, button_height])
         retract_close_button = Button(ax_button_RetractClose, 'Retract/Close', color='lightgray')
         retract_close_button.ax.set_facecolor('lightgray')
         retract_close_button.color = 'lightgray'
@@ -527,40 +527,40 @@ class PlotManager:
     def connect_button(self, button_name, callback):
         """
         Connecte un bouton à une fonction de rappel
-        
+
         Args:
             button_name: Nom du bouton à connecter
             callback: Fonction à appeler lorsque le bouton est cliqué
         """
         if button_name in self.buttons:
             # Pour les boutons qui peuvent être désactivés (push_open, retract_close, co2_temp_humidity, res_temp, protocole_complet, etc.)
-            if button_name in ['push_open', 'retract_close', 'co2_temp_humidity', 'res_temp', 'set_Tcons', 'protocole_complet']:
-                
+            if button_name in ['push_open', 'retract_close', 'co2_temp_humidity', 'res_temp', 'set_Tcons', 'protocole_complet', 'regeneration', 'conductance_regen']:
+
                 def wrapped_disabled_callback(event):
                     # Ne rien faire si le bouton est désactivé
                     if hasattr(self.buttons[button_name], 'active') and not self.buttons[button_name].active:
                         return
-                    
+
                     # Sinon, appeler le callback normal avec l'event
                     callback(event)
-                
+
                 self.buttons[button_name].on_clicked(wrapped_disabled_callback)
-                
+
                 # S'assurer que le bouton a l'attribut 'active'
                 if not hasattr(self.buttons[button_name], 'active'):
                     self.buttons[button_name].active = True
-                
+
             # Cas spécial pour le bouton init qui active les autres boutons
             elif button_name == 'init':
                 original_color = self.buttons[button_name].ax.get_facecolor()
-                
+
                 def wrapped_init_callback(event):
                     # Appeler le callback original
                     callback(event)
-                    
+
                     # Restaurer la couleur originale après le clic
                     self.buttons[button_name].ax.set_facecolor('lightblue')
-                    
+
                     # Activer les boutons push_open et retract_close
                     for btn_name in ['push_open', 'retract_close']:
                         if btn_name in self.buttons:
@@ -568,10 +568,17 @@ class PlotManager:
                             button.active = True
                             button.ax.set_facecolor('white')
                             button.color = 'white'
-                    
+
+                    # Mettre à jour l'état des boutons de protocole en fonction des mesures actuellement actives
+                    self.update_protocol_button_states(
+                        measure_co2_temp_humidity_active=hasattr(self, 'measure_co2_temp_humidity_active') and self.measure_co2_temp_humidity_active,
+                        measure_conductance_active=hasattr(self, 'measure_conductance_active') and self.measure_conductance_active,
+                        measure_res_temp_active=hasattr(self, 'measure_res_temp_active') and self.measure_res_temp_active
+                    )
+
                     # Forcer la mise à jour du canvas
                     self.buttons[button_name].ax.figure.canvas.draw_idle()
-                
+
                 self.buttons[button_name].on_clicked(wrapped_init_callback)
             else:
                 self.buttons[button_name].on_clicked(callback)
@@ -690,7 +697,7 @@ class PlotManager:
     def update_regeneration_status(self, status, results=None):
         """
         Met à jour l'état du bouton de régénération en fonction de la progression de la régénération
-        
+
         Args:
             status: Dictionnaire contenant l'état du protocole de régénération
                 'active': bool - True si la régénération est en cours
@@ -703,10 +710,13 @@ class PlotManager:
         """
         if 'regeneration' not in self.buttons:
             return
-            
+
         regeneration_button = self.buttons['regeneration']
         cancel_button = self.buttons.get('cancel_regeneration')
-        
+
+        # Créer/mettre à jour l'attribut regeneration_active
+        self.regeneration_active = status['active']
+
         if status['active']:
             # Regeneration in progress, display status
             regeneration_button.label.set_text(f"Regenerating... {status['progress']:.0f}%")
@@ -714,63 +724,72 @@ class PlotManager:
             regeneration_button.color = 'lightgray'
             regeneration_button.label.set_color('black')
             regeneration_button.active = False
-            
+
             # Show cancel button
             if cancel_button:
                 cancel_button.ax.set_visible(True)
                 cancel_button.active = True
-                
+
             # Désactiver les boutons CO2/T/H et Res/Temp pendant la régénération
             self.set_regeneration_buttons_state(False)
         else:
             # Regeneration not active, reset button
-            regeneration_button.label.set_text("Start Regeneration")
+            regeneration_button.label.set_text("Protocole CO2")  # Nom corrigé
             regeneration_button.ax.set_facecolor('firebrick')
             regeneration_button.color = 'firebrick'
             regeneration_button.label.set_color('white')
             regeneration_button.active = True
-            
-            # Hide cancel button
-            if cancel_button:
+
+            # Hide cancel button if no other protocol is running
+            # Vérification si d'autres protocoles sont actifs avant de cacher le bouton cancel
+            other_protocols_active = False
+            for attr in ['conductance_regen_active', 'protocole_complet_active']:
+                if hasattr(self, attr) and getattr(self, attr, False):
+                    other_protocols_active = True
+                    break
+
+            if not other_protocols_active and cancel_button:
                 cancel_button.ax.set_visible(False)
                 cancel_button.active = False
-                
+
             # Réactiver les boutons CO2/T/H et Res/Temp après la régénération
-            self.set_regeneration_buttons_state(True)
-            
+            # seulement si aucun autre protocole n'est actif
+            if not other_protocols_active:
+                self.set_regeneration_buttons_state(True)
+
             # Mettre à jour les afficheurs de résultats si disponibles
             if results is not None:
                 delta_c = results.get('delta_c', 0)
                 carbon_mass = results.get('carbon_mass', 0)
                 percolation_time = results.get('percolation_time', 0)
-                
+
                 # Mise à jour de l'afficheur Delta C
                 if 'delta_c_display' in self.indicators:
                     ax_delta_c = self.indicators['delta_c_display']
                     ax_delta_c.clear()
-                    ax_delta_c.text(0.5, 0.5, f"Delta C: {delta_c:.2f} ppm", 
+                    ax_delta_c.text(0.5, 0.5, f"Delta C: {delta_c:.2f} ppm",
                                    ha="center", va="center", transform=ax_delta_c.transAxes)
                     ax_delta_c.axis('off')
-                
+
                 # Mise à jour de l'afficheur de masse de carbone
                 if 'carbon_mass_display' in self.indicators:
                     ax_carbon_mass = self.indicators['carbon_mass_display']
                     ax_carbon_mass.clear()
-                    ax_carbon_mass.text(0.5, 0.5, f"Masse C: {carbon_mass:.2f} µg", 
+                    ax_carbon_mass.text(0.5, 0.5, f"Masse C: {carbon_mass:.2f} µg",
                                       ha="center", va="center", transform=ax_carbon_mass.transAxes)
                     ax_carbon_mass.axis('off')
-                
+
                 # Mise à jour de l'afficheur du temps de percolation
                 if 'percolation_time_display' in self.indicators:
                     ax_percolation_time = self.indicators['percolation_time_display']
                     ax_percolation_time.clear()
                     # Toujours afficher en secondes, quelle que soit la durée
-                    ax_percolation_time.text(0.5, 0.5, f"T perco: {percolation_time:.1f} s", 
+                    ax_percolation_time.text(0.5, 0.5, f"T perco: {percolation_time:.1f} s",
                                           ha="center", va="center", transform=ax_percolation_time.transAxes)
                     ax_percolation_time.axis('off')
-            
+
         regeneration_button.ax.figure.canvas.draw_idle()
-        
+
         # Redraw cancel button if it exists
         if cancel_button:
             cancel_button.ax.figure.canvas.draw_idle()
@@ -822,10 +841,16 @@ class PlotManager:
                 event_time = events['conductance_decrease_time'] / 60.0 if self.display_minutes else events['conductance_decrease_time']
                 ax.axvline(x=event_time, color='purple', linestyle=':', linewidth=1.5, label='Décroissance < 5 µS')
                 has_markers = True
-                
+
             if 'post_regen_stability_time' in events and events['post_regen_stability_time']:
                 event_time = events['post_regen_stability_time'] / 60.0 if self.display_minutes else events['post_regen_stability_time']
                 ax.axvline(x=event_time, color='cyan', linestyle=':', linewidth=1.5, label='Restabilisation post-régén')
+                has_markers = True
+
+            # Marqueur pour la première stabilité du protocole complet
+            if 'first_stability_time' in events and events['first_stability_time']:
+                event_time = events['first_stability_time'] / 60.0 if self.display_minutes else events['first_stability_time']
+                ax.axvline(x=event_time, color='magenta', linestyle=':', linewidth=1.5, label='Première stabilité')
                 has_markers = True
             
             # Afficher la légende seulement s'il y a des marqueurs
@@ -1274,62 +1299,112 @@ class PlotManager:
         Met à jour l'état des boutons de protocole en fonction des mesures actives
         - Le bouton de protocole CO2 doit être cliquable si CO2 et Tcons/Tmes sont actifs
         - Le bouton de protocole de conductance doit être cliquable si Conductance et Tcons/Tmes sont actifs
-        - Le bouton de protocole complet doit être cliquable si les trois mesures sont actives
-        
+        - Le bouton de protocole complet doit être cliquable si les trois mesures sont actives ET que l'init a été effectué
+
         Args:
             measure_co2_temp_humidity_active: Si la mesure de CO2/température/humidité est active
             measure_conductance_active: Si la mesure de conductance est active
             measure_res_temp_active: Si la mesure de résistance/température est active
         """
-        # Protocole CO2 button - clickable if CO2 and Temp active
-        if measure_co2_temp_humidity_active and measure_res_temp_active:
-            # Enable CO2 protocol button
-            self.buttons['regeneration'].ax.set_facecolor('firebrick')
-            self.buttons['regeneration'].color = 'firebrick'
-            self.buttons['regeneration'].label.set_color('white')
-            self.buttons['regeneration'].active = True
-        else:
-            # Disable CO2 protocol button
-            self.buttons['regeneration'].ax.set_facecolor('lightgray')
-            self.buttons['regeneration'].color = 'lightgray'
-            self.buttons['regeneration'].label.set_color('darkgray')
-            self.buttons['regeneration'].active = False
-        
-        # Protocole Conductance button - clickable if Conductance and Temp active
-        if measure_conductance_active and measure_res_temp_active:
-            # Enable Conductance protocol button
-            self.buttons['conductance_regen'].ax.set_facecolor('darkblue')
-            self.buttons['conductance_regen'].color = 'darkblue'
-            self.buttons['conductance_regen'].label.set_color('white')
-            self.buttons['conductance_regen'].active = True
-        else:
-            # Disable Conductance protocol button
-            self.buttons['conductance_regen'].ax.set_facecolor('lightgray')
-            self.buttons['conductance_regen'].color = 'lightgray'
-            self.buttons['conductance_regen'].label.set_color('darkgray')
-            self.buttons['conductance_regen'].active = False
-        
-        # Protocole Complet button - clickable if all three measurements are active
-        if measure_conductance_active and measure_co2_temp_humidity_active and measure_res_temp_active:
-            # Enable Complete protocol button
-            self.buttons['protocole_complet'].ax.set_facecolor('darkgreen')
-            self.buttons['protocole_complet'].color = 'darkgreen'
-            self.buttons['protocole_complet'].label.set_color('white')
-            self.buttons['protocole_complet'].active = True
-        else:
-            # Disable Complete protocol button
-            self.buttons['protocole_complet'].ax.set_facecolor('lightgray')
-            self.buttons['protocole_complet'].color = 'lightgray'
-            self.buttons['protocole_complet'].label.set_color('darkgray')
-            self.buttons['protocole_complet'].active = False
-            
-        # Redraw the buttons
-        self.fig.canvas.draw_idle()
+        # Mémoriser les états des mesures pour pouvoir y accéder plus tard
+        self.measure_co2_temp_humidity_active = measure_co2_temp_humidity_active
+        self.measure_conductance_active = measure_conductance_active
+        self.measure_res_temp_active = measure_res_temp_active
+
+        # Vérifier si l'initialisation a été effectuée (boutons push_open et retract_close actifs)
+        init_done = (
+            'push_open' in self.buttons and
+            hasattr(self.buttons['push_open'], 'active') and
+            self.buttons['push_open'].active
+        )
+
+         # Protocole CO2 - nécessite CO2 et température
+        co2_protocol_ready = measure_co2_temp_humidity_active and measure_res_temp_active
+        self._update_button_state('regeneration', co2_protocol_ready, 'firebrick')
+
+        # Protocole Conductance - nécessite conductance et température
+        cond_protocol_ready = measure_conductance_active and measure_res_temp_active
+        self._update_button_state('conductance_regen', cond_protocol_ready, 'darkblue')
+
+        # Protocole Complet - nécessite les 3 mesures ET init
+        full_protocol_ready = (measure_co2_temp_humidity_active and
+                            measure_conductance_active and
+                            measure_res_temp_active and
+                            init_done)
+        self._update_button_state('protocole_complet', full_protocol_ready, 'darkgreen')
+
+        # Toujours montrer le bouton Cancel si un protocole est actif
+        self._update_cancel_button_visibility()
+
+    def _update_button_state(self, button_name, is_active, active_color):
+        """Met à jour l'état d'un bouton de protocole"""
+        if button_name in self.buttons:
+            button = self.buttons[button_name]
+            button.active = is_active
+            if is_active:
+                button.ax.set_facecolor(active_color)
+                button.color = active_color
+                button.label.set_color('white')
+            else:
+                button.ax.set_facecolor('lightgray')
+                button.color = 'lightgray'
+                button.label.set_color('darkgray')
+            button.ax.figure.canvas.draw_idle()
+
+    def _update_cancel_button_visibility(self):
+        """Met à jour la visibilité du bouton Cancel"""
+        if 'cancel_regeneration' in self.buttons:
+            cancel_button = self.buttons['cancel_regeneration']
+            # Montrer le bouton si un protocole est actif
+            # Vérifier d'abord si les attributs existent dans la classe
+            protocol_active = False
+
+            # Vérifier si protocole_complet_active est à True
+            if hasattr(self, 'protocole_complet_active') and self.protocole_complet_active:
+                protocol_active = True
+                # Repositionner le bouton cancel au-dessus du bouton protocole_complet
+                if 'protocole_complet' in self.buttons:
+                    protocole_complet_button = self.buttons['protocole_complet']
+                    if hasattr(protocole_complet_button, 'ax') and hasattr(protocole_complet_button.ax, 'get_position'):
+                        button_position = protocole_complet_button.ax.get_position()
+                        cancel_position = cancel_button.ax.get_position()
+                        # Centrer le bouton cancel au-dessus du protocole complet
+                        new_x = button_position.x0 + button_position.width/2 - cancel_position.width/2
+                        new_cancel_position = [new_x, cancel_position.y0, cancel_position.width, cancel_position.height]
+                        cancel_button.ax.set_position(new_cancel_position)
+
+                        # Assurer que le bouton cancel est au-dessus des autres éléments (z-order)
+                        # Plus la valeur est élevée, plus l'élément est au-dessus
+                        cancel_button.ax.set_zorder(10000)  # Valeur très élevée pour être au-dessus de tous les autres éléments
+
+                        # Déplacer légèrement le bouton pour qu'il soit plus visible (décalage vers le haut)
+                        new_cancel_position[1] += 0.02  # Augmenter la position Y pour l'éloigner du bouton protocole
+                        cancel_button.ax.set_position(new_cancel_position)
+
+                        # Changer la couleur pour qu'il soit plus visible
+                        cancel_button.ax.set_facecolor('orangered')  # Couleur plus vive
+                        cancel_button.color = 'orangered'
+                        cancel_button.label.set_color('white')  # Texte blanc pour meilleur contraste
+
+            # Vérifier les autres protocoles
+            if not protocol_active:
+                for protocol_name in ['regeneration_active', 'conductance_regen_active']:
+                    if hasattr(self, protocol_name) and getattr(self, protocol_name, False):
+                        protocol_active = True
+                        break
+
+            # Vérifier également si le protocole est actif dans la barre de progression
+            if not protocol_active and 'protocol_progress' in self.indicators and self.indicators['protocol_progress'].get_visible():
+                protocol_active = True
+
+            cancel_button.ax.set_visible(protocol_active)
+            cancel_button.active = protocol_active
+            cancel_button.ax.figure.canvas.draw_idle()
         
     def update_regeneration_status(self, status_info, regeneration_results=None):
         """
         Met à jour l'affichage du statut de régénération/protocole
-        
+
         Args:
             status_info: Dictionnaire contenant les informations de statut
                 'active': Bool - Si le protocole est actif
@@ -1343,22 +1418,38 @@ class PlotManager:
             ax_progress = self.indicators['protocol_progress']
             progress = status_info.get('progress', 0)
             message = status_info.get('message', '')
-            
+
             if status_info.get('active', False):
                 # Afficher la barre de progression
                 ax_progress.set_visible(True)
-                
+
                 # Mettre à jour la barre de progrès
                 ax_progress.clear()
                 ax_progress.barh(0, progress, color='green', height=0.8)
                 ax_progress.set_xlim(0, 100)
                 ax_progress.set_ylim(-0.5, 0.5)
-                ax_progress.text(50, 0, f"{progress:.0f}%", ha='center', va='center', fontsize=8, color='black')
-                
+                ax_progress.text(50, 0, f"{progress:.0f}%", ha='center', va='center', fontsize=9, color='black', fontweight='bold')
+
                 # Ajouter un titre qui indique le type de protocole en cours
-                protocol_type = "CO2" if "regeneration" in message.lower() else "Conductance"
+                protocol_type_info = status_info.get('protocol_type', '')
+
+                if protocol_type_info == 'full':
+                    protocol_type = "Complet"
+                else:
+                    protocol_type = "CO2" if "regeneration" in message.lower() else "Conductance"
+
                 ax_progress.set_title(f"Protocole {protocol_type} : {message}", fontsize=8, pad=2)
+
+                # Rendre le bouton cancel visible pour tous les protocoles
+                if 'cancel_regeneration' in self.buttons:
+                    cancel_button = self.buttons['cancel_regeneration']
+                    cancel_button.ax.set_visible(True)
+                    cancel_button.active = True
+
                 
+                    # Forcer le redessinage du bouton cancel
+                    cancel_button.ax.figure.canvas.draw_idle()
+
                 # Enlever les axes
                 ax_progress.set_xticks([])
                 ax_progress.set_yticks([])
@@ -1366,14 +1457,28 @@ class PlotManager:
             else:
                 # Cacher la barre de progression si le protocole est désactivé
                 ax_progress.set_visible(False)
-            
+
+                # Cacher le bouton cancel seulement si aucun protocole n'est actif
+                if 'cancel_regeneration' in self.buttons:
+                    # Vérifier si un autre protocole est encore actif
+                    other_protocol_active = False
+                    for attr in ['regeneration_active', 'conductance_regen_active', 'protocole_complet_active']:
+                        if hasattr(self, attr) and getattr(self, attr, False):
+                            other_protocol_active = True
+                            break
+
+                    if not other_protocol_active:
+                        self.buttons['cancel_regeneration'].ax.set_visible(False)
+                        self.buttons['cancel_regeneration'].active = False
+                        self.buttons['cancel_regeneration'].ax.figure.canvas.draw_idle()
+
             # Actualiser la barre de progression
             ax_progress.figure.canvas.draw_idle()
-    
+
     def set_close_callback(self, callback):
         """
         Configure un callback pour quand la fenêtre est fermée via le bouton X
-        
+
         Args:
             callback: Fonction à appeler quand la fenêtre est fermée
         """

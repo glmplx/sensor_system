@@ -6,8 +6,6 @@ Application en mode manuel pour le système de capteurs
 import sys
 import time
 import os
-import signal
-import threading
 import serial
 import pyvisa
 import matplotlib.pyplot as plt
@@ -539,39 +537,74 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
     def init_system(event):
         measurements.init_system()
         # La couleur est maintenue automatiquement par le connect_button modifié
+        
+        # Mettre à jour l'état des boutons de protocole après l'initialisation
+        plot_manager.update_protocol_button_states(
+            measure_co2_temp_humidity_active,
+            measure_conductance_active,
+            measure_res_temp_active
+        )
     
-    def start_full_protocol(event):
+    def start_full_protocol(self):
         """Handle full protocol button click"""
-        # Only do something if button is active (not already in a protocol)
-        if hasattr(plot_manager.buttons['full_protocol'], 'active') and plot_manager.buttons['full_protocol'].active:
-            try:
-                # Verify all needed measurements are active
-                if not (measure_co2_temp_humidity_active and measure_conductance_active and measure_res_temp_active):
-                    print("Cannot start full protocol: all measurements must be active")
-                    return
-                
-                # Start full protocol
-                success = measurements.start_full_protocol()
-                if success:
-                    # Update the progress bar
-                    plot_manager.update_regeneration_status({
-                        'active': True,
-                        'step': 1,
-                        'message': "Starting full protocol",
-                        'progress': 0
-                    })
-                    print("Full protocol started")
-                else:
-                    print("Failed to start full protocol")
-            except Exception as e:
-                print(f"Error starting full protocol: {e}")
+        # Ne faire quelque chose que si le bouton est actif (pas déjà dans le protocole)
+        if hasattr(plot_manager.buttons['protocole_complet'], 'active') and plot_manager.buttons['protocole_complet'].active:
+            # Check si init a été effectué
+            if not (hasattr(plot_manager.buttons['push_open'], 'active') and plot_manager.buttons['push_open'].active):
+                print("System initialization required before starting full protocol")
+                return
+
+            # Check si d'autres protocol sont en cours
+            if measurements.regeneration_in_progress or measurements.conductance_regen_in_progress:
+                print("Cannot start full protocol while another protocol is active")
+                return
+
+            # Start full protocol
+            success = measurements.start_full_protocol()
+            if success:
+
+                # Update progress bar
+                plot_manager.update_regeneration_status({
+                    'active': True, 
+                    'step': 1,
+                    'message': "Starting full protocol",
+                    'progress': 0,
+                    'protocol_type': 'full'
+                })
+
+                # Disable all protocol buttons while this protocol is active
+                if 'conductance_regen' in plot_manager.buttons:
+                    conductance_regen_button = plot_manager.buttons['conductance_regen']
+                    conductance_regen_button.ax.set_facecolor('lightgray')
+                    conductance_regen_button.color = 'lightgray'
+                    conductance_regen_button.label.set_color('black')
+                    conductance_regen_button.active = False
+                    conductance_regen_button.ax.figure.canvas.draw_idle()
+
+                if 'regeneration' in plot_manager.buttons:
+                    regeneration_co2_button = plot_manager.buttons['regeneration']
+                    regeneration_co2_button.ax.set_facecolor('lightgray')
+                    regeneration_co2_button.color = 'lightgray'
+                    regeneration_co2_button.label.set_color('black')
+                    regeneration_co2_button.active = False
+                    regeneration_co2_button.ax.figure.canvas.draw_idle()
+
+                # Show cancel button
+                if 'cancel_regeneration' in plot_manager.buttons:
+                    cancel_button = plot_manager.buttons['cancel_regeneration']
+                    cancel_button.ax.set_visible(True)
+                    cancel_button.active = True
+                    cancel_button.ax.figure.canvas.draw_idle()
+
+                # Disable other protocol buttons
+                plot_manager.update_protocol_button_states(False, False, False)
     
     def start_regeneration(event):
         """Handle regeneration button click"""
         # Only do something if button is active (not already in regeneration)
         if hasattr(plot_manager.buttons['regeneration'], 'active') and plot_manager.buttons['regeneration'].active:
             # Check if conductance regen is in progress - don't allow both at the same time
-            if measurements.conductance_regen_in_progress:
+            if measurements.conductance_regen_in_progress or measurements.full_protocol_in_progress:
                 print("Impossible de démarrer le protocole CO2 pendant que le protocole Conductance est actif")
                 return
                 
@@ -586,7 +619,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                     'progress': 0
                 })
                 
-                # Disable conductance regeneration button while this protocol is active
+                # Disable all protocol buttons while this protocol is active
                 if 'conductance_regen' in plot_manager.buttons:
                     conductance_regen_button = plot_manager.buttons['conductance_regen']
                     conductance_regen_button.ax.set_facecolor('lightgray')
@@ -595,54 +628,67 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                     conductance_regen_button.active = False
                     conductance_regen_button.ax.figure.canvas.draw_idle()
                 
+                if 'protocole_complet' in plot_manager.buttons:
+                    protocole_complet_button = plot_manager.buttons['protocole_complet']
+                    protocole_complet_button.ax.set_facecolor('lightgray')
+                    protocole_complet_button.color = 'lightgray'
+                    protocole_complet_button.label.set_color('darkgray')
+                    protocole_complet_button.active = False
+                    protocole_complet_button.ax.figure.canvas.draw_idle()
+                
                 # Mettre à jour l'état du bouton regeneration (CO2)
                 regeneration_button = plot_manager.buttons['regeneration']
                 regeneration_button.ax.set_facecolor('lightgray')
                 regeneration_button.color = 'lightgray'
                 regeneration_button.label.set_color('black')
                 regeneration_button.active = False
+                
+                # Show cancel button
+                if 'cancel_regeneration' in plot_manager.buttons:
+                    cancel_button = plot_manager.buttons['cancel_regeneration']
+                    cancel_button.ax.set_visible(True)
+                    cancel_button.active = True
+                    cancel_button.ax.figure.canvas.draw_idle()
                 # Button will be reactivated when regeneration completes
     
     def cancel_regeneration(event):
-        """Handle regeneration cancel button click"""
-        # Only do something if button is active and visible
-        if hasattr(plot_manager.buttons['cancel_regeneration'], 'active') and plot_manager.buttons['cancel_regeneration'].active:
-            if measurements.regeneration_in_progress:
-                # Cancel CO2 regeneration protocol
-                success = measurements.cancel_regeneration_protocol()
-                if success:
-                    # Update button state
-                    plot_manager.update_regeneration_status({
-                        'active': False,
-                        'step': 0,
-                        'message': "Regeneration cancelled",
-                        'progress': 0
-                    })
-                    
-                    # Re-enable protocol buttons based on measurement conditions
-                    plot_manager.update_protocol_button_states(
-                        measure_co2_temp_humidity_active,
-                        measure_conductance_active,
-                        measure_res_temp_active
-                    )
-            elif measurements.conductance_regen_in_progress:
-                # Cancel conductance regeneration protocol
-                success = measurements.cancel_conductance_regen_protocol()
-                if success:
-                    # Update button state
-                    plot_manager.update_regeneration_status({
-                        'active': False,
-                        'step': 0,
-                        'message': "Conductance protocol cancelled",
-                        'progress': 0
-                    })
-                    
-                    # Re-enable protocol buttons based on measurement conditions
-                    plot_manager.update_protocol_button_states(
-                        measure_co2_temp_humidity_active,
-                        measure_conductance_active,
-                        measure_res_temp_active
-                    )
+        """Gère l'annulation de tous les protocoles"""
+        # Vérifier quel protocole est actif
+        if measurements.full_protocol_in_progress:
+            success = measurements.cancel_full_protocol()
+            if success:
+                print("Protocole complet annulé")
+        elif measurements.regeneration_in_progress:
+            success = measurements.cancel_regeneration_protocol()
+            if success:
+                print("Protocole CO2 annulé")
+        elif measurements.conductance_regen_in_progress:
+            success = measurements.cancel_conductance_regen_protocol()
+            if success:
+                print("Protocole Conductance annulé")
+        
+        # Mettre à jour l'interface
+        plot_manager.update_regeneration_status({
+            'active': False,
+            'step': 0,
+            'message': "Protocole annulé",
+            'progress': 0
+        })
+
+        # Simplement cacher le bouton cancel standard
+        if 'cancel_regeneration' in plot_manager.buttons:
+            plot_manager.buttons['cancel_regeneration'].ax.set_visible(False)
+            plot_manager.buttons['cancel_regeneration'].active = False
+            # Force l'actualisation
+            plot_manager.buttons['cancel_regeneration'].ax.figure.canvas.draw_idle()
+
+        # Nettoyage des boutons supplémentaires terminé
+
+        plot_manager.update_protocol_button_states(
+            measure_co2_temp_humidity_active,
+            measure_conductance_active,
+            measure_res_temp_active
+        )
             
     def quit_program(event):
         nonlocal escape_pressed
@@ -819,7 +865,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
             toggle_co2_temp_humidity(event)
         if measure_regen:
             toggle_res_temp(event)
-            
+
         # Update protocol button states based on active measurements
         plot_manager.update_protocol_button_states(
             measure_co2_temp_humidity_active,
@@ -1338,7 +1384,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         # Only do something if button is active and not already in protocol
         if hasattr(plot_manager.buttons['conductance_regen'], 'active') and plot_manager.buttons['conductance_regen'].active:
             # Check if CO2 regeneration is in progress - don't allow both at the same time
-            if measurements.regeneration_in_progress:
+            if measurements.regeneration_in_progress or measurements.full_protocol_in_progress:
                 print("Impossible de démarrer le protocole Conductance pendant que le protocole CO2 est actif")
                 return
                 
@@ -1353,7 +1399,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                     'progress': 0
                 })
                 
-                # Disable CO2 regeneration button while this protocol is active
+                # Disable all protocol buttons while this protocol is active
                 if 'regeneration' in plot_manager.buttons:
                     regeneration_co2_button = plot_manager.buttons['regeneration']
                     regeneration_co2_button.ax.set_facecolor('lightgray')
@@ -1362,17 +1408,27 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                     regeneration_co2_button.active = False
                     regeneration_co2_button.ax.figure.canvas.draw_idle()
                 
+                if 'protocole_complet' in plot_manager.buttons:
+                    protocole_complet_button = plot_manager.buttons['protocole_complet']
+                    protocole_complet_button.ax.set_facecolor('lightgray')
+                    protocole_complet_button.color = 'lightgray'
+                    protocole_complet_button.label.set_color('darkgray')
+                    protocole_complet_button.active = False
+                    protocole_complet_button.ax.figure.canvas.draw_idle()
+                
                 # Mettre à jour l'état du bouton conductance
                 regeneration_button = plot_manager.buttons['conductance_regen']
                 regeneration_button.ax.set_facecolor('lightgray')
                 regeneration_button.color = 'lightgray'
                 regeneration_button.label.set_color('black')
                 regeneration_button.active = False
-    
-    def cancel_conductance_regen(event):
-        """Handle conductance regeneration cancel button click - redirects to unified cancel function"""
-        # Redirect to the unified cancel function
-        cancel_regeneration(event)
+                
+                # Show cancel button
+                if 'cancel_regeneration' in plot_manager.buttons:
+                    cancel_button = plot_manager.buttons['cancel_regeneration']
+                    cancel_button.ax.set_visible(True)
+                    cancel_button.active = True
+                    cancel_button.ax.figure.canvas.draw_idle()
     
     # Connect event handlers
     plot_manager.connect_button('conductance', toggle_conductance)
@@ -1391,7 +1447,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
     plot_manager.connect_button('regeneration', start_regeneration)
     plot_manager.connect_button('cancel_regeneration', cancel_regeneration)
     plot_manager.connect_button('conductance_regen', start_conductance_regen)
-    plot_manager.connect_button('full_protocol', start_full_protocol)
+    plot_manager.connect_button('protocole_complet', start_full_protocol)
     plot_manager.connect_button('quit', quit_program)
     
     def add_keithley_device(event):
@@ -2078,20 +2134,48 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                         measure_res_temp_active
                     )
         
-        # Handle full protocol
-        if hasattr(measurements, 'full_protocol_in_progress') and measurements.full_protocol_in_progress:
-            try:
-                full_protocol_status = measurements.manage_full_protocol()
-                plot_manager.update_regeneration_status(full_protocol_status, full_protocol_status.get('results'))
+            except Exception as e:
+                print(f"Error managing conductance regen protocol: {e}")
+                # Increment error counters for devices involved
+                device_error_count['regen'] += 1
+                device_error_count['arduino'] += 1
                 
-                # Force completion de protocole s'il atteint 100%
-                if full_protocol_status.get('progress', 0) >= 100:
-                    print("Full protocol completed at 100%")
-                    full_protocol_status['active'] = False
+        # Handle full protocol
+        if measurements.full_protocol_in_progress:
+            try:
+                # Vérifier que les dispositifs nécessaires sont toujours disponibles
+                if (measurements.regen is None or not hasattr(measurements.regen, 'device') or measurements.regen.device is None or
+                    measurements.keithley is None or not hasattr(measurements.keithley, 'device') or measurements.keithley.device is None or
+                    measurements.arduino is None or not hasattr(measurements.arduino, 'read_line') or measurements.arduino.device is None):
+                    # Un des dispositifs est déconnecté, annuler le protocole
+                    print("Annulation du protocole complet: un des dispositifs nécessaires a été déconnecté")
                     measurements.full_protocol_in_progress = False
+                    plot_manager.update_regeneration_status({
+                        'active': False,
+                        'step': 0,
+                        'message': "Protocole annulé - dispositif déconnecté",
+                        'progress': 0
+                    })
+                else:
+                    # Gérer le protocole normalement
+                    full_protocol_status = measurements.manage_full_protocol()
+                    plot_manager.update_regeneration_status(full_protocol_status, full_protocol_status.get('results'))
+                    
+                    # Afficher l'étape actuelle et le message dans la console pour le débogage
+                    if full_protocol_status.get('active', False):
+                        current_step = full_protocol_status.get('step', 0)
+                        progress = full_protocol_status.get('progress', 0)
+                        if int(progress) % 10 == 0:  # Afficher tous les 10% seulement pour ne pas spammer la console
+                            print(f"Protocole complet - Étape {current_step}: {full_protocol_status.get('message', '')} ({progress:.1f}%)")
+                    
+                    # Force completion de protocole s'il atteint 100%
+                    if full_protocol_status.get('progress', 0) >= 100:
+                        print("Protocole complet terminé à 100%")
+                        full_protocol_status['active'] = False
+                        measurements.full_protocol_in_progress = False
                 
                 # Réactiver les boutons de protocole si terminé
-                if not full_protocol_status['active']:
+                if full_protocol_status.get('active') is False:
                     # Re-enable protocol buttons based on measurement conditions
                     plot_manager.update_protocol_button_states(
                         measure_co2_temp_humidity_active,
@@ -2099,34 +2183,14 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                         measure_res_temp_active
                     )
                     
-                    # Hide the cancel button
-                    if 'cancel_regeneration' in plot_manager.buttons:
-                        cancel_button = plot_manager.buttons['cancel_regeneration']
-                        cancel_button.ax.set_visible(False)
-                        cancel_button.active = False
-                    
-                    # Hide the cancel button
-                    if 'cancel_regeneration' in plot_manager.buttons:
-                        cancel_button = plot_manager.buttons['cancel_regeneration']
-                        cancel_button.ax.set_visible(False)
-                        cancel_button.active = False
-                        cancel_button.ax.figure.canvas.draw_idle()
-                else:
-                    # Show the cancel button during the protocol
-                    if 'cancel_regeneration' in plot_manager.buttons:
-                        cancel_button = plot_manager.buttons['cancel_regeneration']
-                        if not cancel_button.ax.get_visible():
-                            cancel_button.ax.set_visible(True)
-                            cancel_button.active = True
-                            cancel_button.ax.figure.canvas.draw_idle()
             except Exception as e:
-                print(f"Error managing conductance regeneration protocol: {e}")
+                print(f"Error managing full protocol: {e}")
                 # Incrémenter les compteurs d'erreurs des deux appareils impliqués
                 device_error_count['regen'] += 1
                 device_error_count['keithley'] += 1
                 
         # S'assurer que le bouton d'annulation est caché si aucun protocole n'est en cours
-        if not measurements.regeneration_in_progress and not measurements.conductance_regen_in_progress:
+        if not measurements.regeneration_in_progress and not measurements.conductance_regen_in_progress and not measurements.full_protocol_in_progress:
             if 'cancel_regeneration' in plot_manager.buttons:
                 cancel_button = plot_manager.buttons['cancel_regeneration']
                 if cancel_button.ax.get_visible():

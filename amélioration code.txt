@@ -1,0 +1,42 @@
+corrige ces points negatives
+ 0. TOUS LES Commentaires en Français et supprimer les commentaires en double et les commentaire inutiles
+ 1. Réorganisation de la structure du code :
+    - Création d'un module commun base_app.py pour extraire les fonctionnalités partagées entre auto_app.py et manual_app.py        
+    - Déplacer les gestionnaires d'événements dans des modules séparés (par exemple, event_handlers/) pour réduire la longueur des fichiers de l'application principale.
+    - Créer un module dédié connections.py pour gérer l'initialisation de l'appareil et la gestion des connexions
+ 2. Duplication du code :
+    - Le code d'établissement des connexions est dupliqué entre auto_app.py et manual_app.py
+    - Le code d'arrêt et de nettoyage est dupliqué entre les applications.
+    - Les schémas de gestion des erreurs de périphérique sont répétés
+ 3. Fonctions trop longues :
+    - quit_program() dans les deux applications est longue et gère plusieurs problèmes.
+    - Les fonctions principales des modules des deux applications sont trop longues (plus de 500 lignes).
+    - Les boucles « while » principales contiennent trop de logique imbriquée.
+ 4. Gestion de la configuration :
+    - Les constantes sont réparties dans différents fichiers (principalement dans constants.py, mais il existe des valeurs codées en dur).
+    - Les constantes spécifiques à un appareil devraient être déplacées dans leurs modules respectifs
+ 5. Organisation des composants de l'interface utilisateur :
+    - La classe PlotManager a trop de responsabilités (à la fois en matière de traçage et de contrôles de l'interface utilisateur).
+    - Diviser PlotManager en classes plus petites (par exemple, ButtonManager, IndicatorManager, PlotManager)
+ 6. Problèmes de taille de fichier :
+    - auto_app.py et manual_app.py sont trop volumineux (plus de 25 000 tokens)
+    - measurement_manager.py est probablement trop grand aussi
+ 7. Gestion des threads :
+    - L'utilisation des threads n'est pas cohérente dans l'ensemble de l'application.
+    - Pas de modèle clair de gestion des threads pour les opérations de longue durée
+ 8. Documentation et commentaires :
+    - Certaines fonctions ne sont pas correctement documentées
+    - Les commentaires en ligne sont parfois excessifs ou redondants
+ 9. Abstraction des dispositifs :
+    - Créer une classe BaseDevice commune dont toutes les classes de périphériques héritent
+
+ 10. Organisation des fonctions utilitaires :
+    - Déplacer les fonctions d'aide des applications principales dans les modules utilitaires appropriés.
+    - Mieux organiser les fonctions utilitaires en fonction de leur objectif (opérations de fichiers, transformations de données, etc.)
+ 11. Amélioration de la journalisation des erreurs :
+    - Remplacer les instructions d'impression par une journalisation appropriée en utilisant le module de journalisation de Python
+    - Créer un système de rapport d'erreur cohérent dans un dossier appeler log
+ 12. Gestion de l'état :
+    - Créer une classe dédiée à la gestion de l'état de l'application pour réduire les variables globales 
+    - Meilleure gestion des transitions de l'état de l'application
+

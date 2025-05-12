@@ -1,0 +1,15 @@
+
+
+
+corrige ces points negatives
+    - Réorganisation de la structure du code :
+    - Création d'un module commun base_app.py pour extraire les fonctionnalités partagées entre auto_app.py et manual_app.py        
+    - Déplacer les gestionnaires d'événements dans des modules séparés (par exemple, event_handlers/) pour réduire la longueur des fichiers de l'application principale.
+    - Créer un module dédié connections.py pour gérer l'initialisation de l'appareil et la gestion des connexions
+    - Le code d'établissement des connexions est dupliqué entre auto_app.py et manual_app.py
+    - Ne pas avoir de code dupliqué ou inutile
+    - Les constantes sont réparties dans différents fichiers (principalement dans constants.py, mais il existe des valeurs codées en dur).
+    - Diviser PlotManager en classes plus petites (par exemple, ButtonManager, IndicatorManager, PlotManager)
+    Problèmes de taille de fichier :
+    - auto_app.py et manual_app.py sont trop volumineux (plus de 25 000 tokens)
+    - measurement_manager.py est probablement trop grand aussi
