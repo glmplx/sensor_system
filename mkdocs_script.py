@@ -146,6 +146,7 @@ def generate_mkdocs_structure(functions_data, output_dir='docs'):
     print(f"Structure MkDocs générée dans le dossier '{output_dir}'")
 
 def main():
+    """Point d'entrée principal du script."""
     print("🔍 Recherche des fichiers Python...")
     python_files = find_python_files()
     

@@ -75,7 +75,7 @@ Configure la figure et les axes pour les graphiques
 def center_window()
 ```
 
-Pas de docstring
+Centre la fenêtre sur l'écran
 
 ---
 
@@ -148,7 +148,7 @@ callback: Fonction à appeler lorsque le bouton est cliqué
 def wrapped_disabled_callback(event)
 ```
 
-Pas de docstring
+Fonction de rappel qui gère les boutons désactivés
 
 ---
 
@@ -158,7 +158,7 @@ Pas de docstring
 def wrapped_init_callback(event)
 ```
 
-Pas de docstring
+Fonction de rappel qui gère le bouton init
 
 ---
 
@@ -521,7 +521,7 @@ callback: Fonction à appeler quand la fenêtre est fermée
 def new_close_event(event)
 ```
 
-Pas de docstring
+La fonction def new_close_event(event): sert à intercepter l'événement de fermeture de la fenêtre
 
 ---
 
@@ -531,7 +531,7 @@ Pas de docstring
 def on_close(event)
 ```
 
-Pas de docstring
+Fonction de gestion d’événement utilisée uniquement pour le backend wxPython
 
 ---
 

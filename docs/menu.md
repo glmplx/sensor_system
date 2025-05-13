@@ -15,7 +15,9 @@
 - [`launch_program(self)`](#launch_program)
 - [`open_documentation(self)`](#open_documentation)
 - [`run_mkdocs_server()`](#run_mkdocs_server)
-- [`open_browser()`](#open_browser)
+- [`check_server_status(attempt=1, max_attempts=10)`](#check_server_status)
+- [`_find_available_port(self, start_port=8000, end_port=8020)`](#_find_available_port)
+- [`_kill_mkdocs_server(self)`](#_kill_mkdocs_server)
 - [`open_config_window(self)`](#open_config_window)
 - [`quit_application(self)`](#quit_application)
 - [`run(self)`](#run)
@@ -82,7 +84,7 @@ Configurer les éléments de l'interface utilisateur
 def toggle_location_selector(*args)
 ```
 
-Pas de docstring
+Afficher ou masquer le champ de saisie de l'emplacement de sauvegarde
 
 ---
 
@@ -92,7 +94,7 @@ Pas de docstring
 def browse_directory()
 ```
 
-Pas de docstring
+Ouvrir le sélecteur de dossier pour choisir l'emplacement de sauvegarde
 
 ---
 
@@ -148,7 +150,7 @@ Lancer le mode de programme sélectionné
 def open_documentation(self)
 ```
 
-Lance mkdocs serve et ouvre la documentation dans un navigateur, adapté pour fonctionnement hors-ligne
+Lance mkdocs serve et ouvre la documentation dans un navigateur
 
 ---
 
@@ -158,17 +160,37 @@ Lance mkdocs serve et ouvre la documentation dans un navigateur, adapté pour fo
 def run_mkdocs_server()
 ```
 
-Pas de docstring
+Lancer le serveur mkdocs dans un thread séparé
 
 ---
 
-## `open_browser()` { #open_browser }
+## `check_server_status(attempt=1, max_attempts=10)` { #check_server_status }
 
 ```python
-def open_browser()
+def check_server_status(attempt=1, max_attempts=10)
 ```
 
-Pas de docstring
+Vérifier si le serveur MkDocs est prêt
+
+---
+
+## `_find_available_port(self, start_port=8000, end_port=8020)` { #_find_available_port }
+
+```python
+def _find_available_port(self, start_port=8000, end_port=8020)
+```
+
+Trouve un port disponible dans la plage spécifiée
+
+---
+
+## `_kill_mkdocs_server(self)` { #_kill_mkdocs_server }
+
+```python
+def _kill_mkdocs_server(self)
+```
+
+Arrête le serveur MkDocs s'il est en cours d'exécution
 
 ---
 

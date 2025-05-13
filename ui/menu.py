@@ -8,6 +8,9 @@ import subprocess
 import serial.tools.list_ports
 import os
 import sys
+import requests
+from urllib.error import URLError
+
 from core.constants import (
     EXCEL_BASE_DIR,
     # Constantes de conductance
@@ -383,6 +386,10 @@ class MenuUI:
     
     def launch_program(self):
         """Lancer le mode de programme sélectionné"""
+
+        # Arrêter le serveur MkDocs s'il est en cours
+        self._kill_mkdocs_server()
+
         if not self.mode_manual_var.get() and not self.mode_auto_var.get():
             return  # Do nothing if no mode is selected
         
@@ -558,85 +565,157 @@ class MenuUI:
             tk.messagebox.showerror("Erreur", "Fichier mkdocs.yml non trouvé. Veuillez exécuter mkdocs_script.py d'abord.")
             return
         
-        # Lancer mkdocs serve et ouvrir dans le navigateur
+        # Vérifier que mkdocs est installé
+        try:
+            subprocess.run(["mkdocs", "--version"], 
+                        check=True, 
+                        stdout=subprocess.PIPE, 
+                        stderr=subprocess.PIPE,
+                        shell=sys.platform.startswith('win'))
+        except (subprocess.SubprocessError, FileNotFoundError):
+            tk.messagebox.showerror(
+                "Erreur",
+                "MkDocs n'est pas correctement installé ou n'est pas dans le PATH.\n"
+                "Veuillez l'installer avec: pip install mkdocs mkdocs-material"
+            )
+            return
+            
+        # Vérifier si le port 8000 est déjà utilisé
+        mkdocs_url = "http://127.0.0.1:8000/"
+        try:
+            response = requests.get(mkdocs_url, timeout=1)
+            if response.status_code == 200:
+                response = tk.messagebox.askyesno(
+                    "MkDocs déjà actif",
+                    "Un serveur MkDocs est déjà actif sur le port 8000.\n\n"
+                    "Voulez-vous ouvrir la documentation existante ?",
+                    icon="info"
+                )
+                if response:
+                    webbrowser.open(mkdocs_url)
+                    return
+                else:
+                    self.port, port_libre = self._find_available_port(8001)
+            else:
+                self.port, port_libre = self._find_available_port()
+        except (requests.RequestException, URLError):
+            self.port, port_libre = self._find_available_port()
+            
+        if not port_libre:
+            tk.messagebox.showerror(
+                "Erreur",
+                "Aucun port disponible pour démarrer le serveur MkDocs."
+            )
+            return
+        
+        # Lancer mkdocs serve dans un thread séparé
         try:
             import threading
             import webbrowser
 
-            # Variable pour communiquer entre les threads
             server_ready = threading.Event()
+            server_output = []
+            url = f"http://127.0.0.1:{self.port}/"
 
-            # Fonction pour lancer mkdocs serve dans un thread séparé
             def run_mkdocs_server():
                 """Lancer le serveur mkdocs dans un thread séparé"""
-                os.chdir(base_dir)  # Changer le répertoire de travail
+                os.chdir(base_dir)
                 try:
-                    # Lancer mkdocs serve
+                    cmd = ["mkdocs", "serve", f"--dev-addr=127.0.0.1:{self.port}"]
                     process = subprocess.Popen(
-                        ["mkdocs", "serve"],
+                        cmd,
                         stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
                         universal_newlines=True,
-                        shell=sys.platform.startswith('win')
+                        shell=sys.platform.startswith('win'),
+                        bufsize=1
                     )
-
-                    # Lire la sortie pour les messages d'erreur ou le port
-                    for line in process.stdout:
-                        # Si la ligne contient "Documentation built" ou "Serving on", le serveur est prêt
-                        if "Documentation built" in line or "Serving on" in line:
+                    
+                    for line in iter(process.stdout.readline, ''):
+                        line = line.strip()
+                        server_output.append(line)
+                        
+                        # Ignorer spécifiquement les messages de liens manquants
+                        if "contains a link" in line and "but there is no such anchor" in line:
+                            continue
+                            
+                        # Afficher les autres messages importants
+                        if any(keyword in line for keyword in [
+                            "Serving on", 
+                            "The documentation will be available at",
+                            "INFO    - Building",
+                            "INFO    - Documentation built",
+                            "WARNING -",
+                            "ERROR -"
+                        ]):
+                            print(f"MkDocs: {line}")
+                        
+                        if "Serving on" in line:
                             server_ready.set()
-                            break
-                except Exception:
-                    server_ready.set()  # Signaler même en cas d'erreur pour ne pas bloquer le thread principal
+                            
+                except Exception as e:
+                    print(f"ERREUR MkDocs: {str(e)}")
+                    server_output.append(f"Exception: {str(e)}")
 
-            # Lancer le serveur dans un thread séparé
+            # Démarrer le thread
             server_thread = threading.Thread(target=run_mkdocs_server, daemon=True)
             server_thread.start()
 
-            # Attendre jusqu'à 5 secondes maximum pour que le serveur soit prêt
-            server_ready.wait(timeout=3.0)
+            # Fonction pour ouvrir le navigateur quand le serveur est prêt
+            def check_server_status(attempt=1, max_attempts=10):
+                """Vérifier si le serveur MkDocs est prêt"""
+                if server_ready.is_set():
+                    webbrowser.open(url)
+                    tk.messagebox.showinfo(
+                        "Documentation",
+                        f"Documentation ouverte à l'adresse: {url}"
+                    )
+                elif attempt <= max_attempts:
+                    self.window.after(1000, lambda: check_server_status(attempt+1))
+                else:
+                    tk.messagebox.showerror(
+                        "Timeout",
+                        "Le serveur MkDocs n'a pas démarré dans le temps imparti.\n"
+                        f"Essayez d'ouvrir manuellement: {url}"
+                    )
 
-            # Ouvrir l'URL dans le navigateur
-            def open_browser():
-                """Ouvrir le navigateur à l'URL de la documentation"""
-                url = "http://127.0.0.1:8000/"  # URL par défaut pour mkdocs serve
-                webbrowser.open(url)
+            # Commencer à vérifier le statut
+            self.window.after(1000, lambda: check_server_status(1))
 
-            # Exécuter l'action dans le thread principal
-            self.window.after(500, open_browser)  # Attendre un peu plus longtemps avant d'ouvrir le navigateur
-
-            tk.messagebox.showinfo(
-                "Documentation",
-                "La documentation a été ouverte dans votre navigateur.\n\n"
-                "Note: Le serveur s'arrêtera automatiquement à la fermeture de l'application."
+        except Exception as e:
+            tk.messagebox.showerror(
+                "Erreur",
+                f"Erreur lors du démarrage du serveur: {str(e)}"
             )
 
-        except Exception:
-            # Si mkdocs ne fonctionne pas, essayer d'ouvrir le fichier directement
-            doc_path = os.path.join(base_dir, "docs", "index.md")
-
-            try:
-                # Utiliser la commande appropriée selon le système d'exploitation
-                if sys.platform.startswith('win'):
-                    os.startfile(doc_path)
-                elif sys.platform.startswith('darwin'):  # macOS
-                    subprocess.call(['open', doc_path])
-                else:  # linux
-                    subprocess.call(['xdg-open', doc_path])
-
-                tk.messagebox.showinfo(
-                    "Documentation",
-                    "Les fichiers de documentation ont été ouverts directement.\n"
-                    "Pour une meilleure expérience, installez MkDocs: pip install mkdocs mkdocs-material"
-                )
-            except Exception:
-                tk.messagebox.showerror(
-                    "Erreur",
-                    "Impossible d'ouvrir la documentation.\n\n"
-                    "Vous pouvez lancer manuellement: mkdocs serve\n"
-                    "Puis ouvrir http://127.0.0.1:8000/ dans votre navigateur."
-                )
-
+    def _find_available_port(self, start_port=8000, end_port=8020):
+        """Trouve un port disponible dans la plage spécifiée"""
+        import socket
+        for port in range(start_port, end_port + 1):
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                try:
+                    s.bind(("127.0.0.1", port))
+                    return port, True
+                except socket.error:
+                    continue
+        return start_port, False
+    
+    def _kill_mkdocs_server(self):
+        """Arrête le serveur MkDocs s'il est en cours d'exécution"""
+        try:
+            if sys.platform.startswith('win'):
+                # Windows - utiliser taskkill
+                subprocess.run(["taskkill", "/F", "/IM", "mkdocs.exe"], 
+                            stdout=subprocess.PIPE, 
+                            stderr=subprocess.PIPE,
+                            shell=True)
+            else:
+                # Linux/Mac - utiliser pkill
+                subprocess.run(["pkill", "-f", "mkdocs serve"], 
+                            stdout=subprocess.PIPE, 
+                            stderr=subprocess.PIPE)
+        except Exception as e:
+            print(f"Erreur lors de l'arrêt du serveur MkDocs: {e}")
 
     def open_config_window(self):
         """Ouvre la fenêtre de configuration des constantes"""
@@ -648,6 +727,10 @@ class MenuUI:
     
     def quit_application(self):
         """Ferme l'application proprement et termine le processus"""
+
+        # Arrêter le serveur MkDocs s'il est en cours
+        self._kill_mkdocs_server()
+
         self.window.destroy()
         import sys
         sys.exit(0)

@@ -46,7 +46,7 @@ Génère la structure de documentation pour MkDocs.
 def main()
 ```
 
-Pas de docstring
+Point d'entrée principal du script.
 
 ---
 

@@ -9,9 +9,9 @@
 - [`_create_workbook_with_info(self, file_path, file_type)`](#_create_workbook_with_info)
 - [`add_sheet_to_excel(self, file_path, sheet_name, data)`](#add_sheet_to_excel)
 - [`_update_cumulative_sheet(self, file_path)`](#_update_cumulative_sheet)
+- [`raz_conductance_data(self, timeList, conductanceList, resistanceList)`](#raz_conductance_data)
 - [`raz_co2_temp_humidity_data(self, co2_timestamps, co2_values, temp_timestamps, temp_values, humidity_timestamps, humidity_values)`](#raz_co2_temp_humidity_data)
 - [`raz_temp_res_data(self, timestamps, temperatures, tcons_values)`](#raz_temp_res_data)
-- [`raz_conductance_data(self, timeList, conductanceList, resistanceList)`](#raz_conductance_data)
 - [`save_conductance_data(self, timeList, conductanceList, resistanceList, sheet_name=None)`](#save_conductance_data)
 - [`save_co2_temp_humidity_data(self, co2_timestamps, co2_values, temp_timestamps, temp_values, humidity_timestamps, humidity_values, delta_c=None, carbon_mass=None, sheet_name=None)`](#save_co2_temp_humidity_data)
 - [`save_temp_res_data(self, timestamps, temperatures, tcons_values, sheet_name=None)`](#save_temp_res_data)
@@ -99,6 +99,16 @@ Met à jour ou crée la feuille 'Essais cumulés' de manière plus robuste
 
 ---
 
+## `raz_conductance_data(self, timeList, conductanceList, resistanceList)` { #raz_conductance_data }
+
+```python
+def raz_conductance_data(self, timeList, conductanceList, resistanceList)
+```
+
+Prépare les données pour un nouvel essai sans sauvegarder immédiatement
+
+---
+
 ## `raz_co2_temp_humidity_data(self, co2_timestamps, co2_values, temp_timestamps, temp_values, humidity_timestamps, humidity_values)` { #raz_co2_temp_humidity_data }
 
 ```python
@@ -116,16 +126,6 @@ def raz_temp_res_data(self, timestamps, temperatures, tcons_values)
 ```
 
 Prépare les données temp/resistance pour un nouvel essai
-
----
-
-## `raz_conductance_data(self, timeList, conductanceList, resistanceList)` { #raz_conductance_data }
-
-```python
-def raz_conductance_data(self, timeList, conductanceList, resistanceList)
-```
-
-Prépare les données pour un nouvel essai sans sauvegarder immédiatement
 
 ---
 

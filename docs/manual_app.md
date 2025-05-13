@@ -10,7 +10,6 @@
 - [`toggle_conductance(event)`](#toggle_conductance)
 - [`toggle_co2_temp_humidity(event)`](#toggle_co2_temp_humidity)
 - [`toggle_res_temp(event)`](#toggle_res_temp)
-- [`update_regeneration_button_state()`](#update_regeneration_button_state)
 - [`raz_conductance(event)`](#raz_conductance)
 - [`raz_co2_temp_humidity(event)`](#raz_co2_temp_humidity)
 - [`raz_res_temp(event)`](#raz_res_temp)
@@ -26,7 +25,6 @@
 - [`quit_program(event)`](#quit_program)
 - [`toggle_all_measurements(event)`](#toggle_all_measurements)
 - [`perform_emergency_backup(reason="sauvegarde automatique")`](#perform_emergency_backup)
-- [`show_backup_notification(reason)`](#show_backup_notification)
 - [`check_device_errors()`](#check_device_errors)
 - [`add_arduino_device(event)`](#add_arduino_device)
 - [`add_keithley_device(event=None)`](#add_keithley_device)
@@ -64,7 +62,7 @@ measure_regen: Activer les mesures de régénération/température (1=activé, 0
 def handle_window_close(event=None)
 ```
 
-Pas de docstring
+Gère la fermeture de la fenêtre
 
 ---
 
@@ -74,7 +72,7 @@ Pas de docstring
 def toggle_conductance(event)
 ```
 
-Pas de docstring
+Gère l'activation/desactivation des données de conductance
 
 ---
 
@@ -84,7 +82,7 @@ Pas de docstring
 def toggle_co2_temp_humidity(event)
 ```
 
-Pas de docstring
+Gère l'activation/desactivation des données CO2/température/humidité
 
 ---
 
@@ -94,17 +92,7 @@ Pas de docstring
 def toggle_res_temp(event)
 ```
 
-Pas de docstring
-
----
-
-## `update_regeneration_button_state()` { #update_regeneration_button_state }
-
-```python
-def update_regeneration_button_state()
-```
-
-Met à jour l'état des boutons de protocole en fonction des mesures actives
+Gère l'activation/desactivation des données de température et de résistance
 
 ---
 
@@ -114,7 +102,7 @@ Met à jour l'état des boutons de protocole en fonction des mesures actives
 def raz_conductance(event)
 ```
 
-Pas de docstring
+Gère la réinitialisation des données de conductance
 
 ---
 
@@ -124,7 +112,7 @@ Pas de docstring
 def raz_co2_temp_humidity(event)
 ```
 
-Pas de docstring
+Gère la réinitialisation des données CO2/température/humidité
 
 ---
 
@@ -134,7 +122,7 @@ Pas de docstring
 def raz_res_temp(event)
 ```
 
-Pas de docstring
+Gère la réinitialisation des données de température et de résistance
 
 ---
 
@@ -144,7 +132,7 @@ Pas de docstring
 def set_R0(event)
 ```
 
-Pas de docstring
+Gère la définition de R0
 
 ---
 
@@ -154,7 +142,7 @@ Pas de docstring
 def set_Tcons(event)
 ```
 
-Pas de docstring
+Gère la définition de Tcons
 
 ---
 
@@ -164,7 +152,7 @@ Pas de docstring
 def update_read_R0(event)
 ```
 
-Pas de docstring
+Gère la lecture de R0
 
 ---
 
@@ -174,7 +162,7 @@ Pas de docstring
 def push_open(event)
 ```
 
-Pas de docstring
+Gère le bouton d'ouverture du vérin
 
 ---
 
@@ -184,7 +172,7 @@ Pas de docstring
 def retract_close(event)
 ```
 
-Pas de docstring
+Gère le bouton de rétraction du vérin
 
 ---
 
@@ -194,7 +182,7 @@ Pas de docstring
 def init_system(event)
 ```
 
-Pas de docstring
+Gère l'initialisation du système
 
 ---
 
@@ -204,7 +192,7 @@ Pas de docstring
 def start_full_protocol(self)
 ```
 
-Handle full protocol button click
+Gère le démarrage du protocole complet
 
 ---
 
@@ -214,7 +202,7 @@ Handle full protocol button click
 def start_regeneration(event)
 ```
 
-Handle regeneration button click
+Gère le démarrage du protocole de régénération
 
 ---
 
@@ -234,7 +222,7 @@ Gère l'annulation de tous les protocoles
 def quit_program(event)
 ```
 
-Pas de docstring
+Gère la fermeture du programme
 
 ---
 
@@ -260,18 +248,6 @@ Args:
 reason: Raison de la sauvegarde (pour le journal et les notifications)
 Returns:
 bool: True si des données ont été sauvegardées, False sinon
-
----
-
-## `show_backup_notification(reason)` { #show_backup_notification }
-
-```python
-def show_backup_notification(reason)
-```
-
-Affiche une notification à l'utilisateur concernant la sauvegarde d'urgence
-Args:
-reason: Raison de la sauvegarde
 
 ---
 
@@ -323,7 +299,7 @@ Fonction pour ajouter une carte de régénération en cours d'exécution
 def start_conductance_regen(event)
 ```
 
-Handle conductance regeneration button click
+Gérer le protocole de régénération de conductance
 
 ---
 

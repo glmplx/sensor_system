@@ -87,7 +87,7 @@ event: Événement déclencheur (clic sur le bouton)
 def set_R0(event)
 ```
 
-Pas de docstring
+Met à jour la valeur de R0 dans le système
 
 ---
 
@@ -97,7 +97,7 @@ Pas de docstring
 def update_read_R0(event)
 ```
 
-Pas de docstring
+Lit la valeur de R0 depuis le capteur et met à jour l'affichage
 
 ---
 
@@ -107,7 +107,7 @@ Pas de docstring
 def push_open(event)
 ```
 
-Pas de docstring
+Gère le clic sur le bouton d'ouverture du vérin
 
 ---
 
@@ -117,7 +117,7 @@ Pas de docstring
 def retract_close(event)
 ```
 
-Pas de docstring
+Gère le clic sur le bouton de fermeture du vérin
 
 ---
 
@@ -127,7 +127,7 @@ Pas de docstring
 def init_system(event)
 ```
 
-Pas de docstring
+Gère le clic sur le bouton d'initialisation du système
 
 ---
 
