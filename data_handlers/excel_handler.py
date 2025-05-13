@@ -18,14 +18,16 @@ from core.constants import EXCEL_BASE_DIR
 class ExcelHandler:
     """Gère les opérations de fichiers Excel pour le stockage, l'organisation et la visualisation des données de mesure"""
     
-    def __init__(self, mode="manual"):
+    def __init__(self, mode="manual", base_dir=None):
         """
         Initialiser le gestionnaire Excel
-        
+
         Args:
             mode: Mode de fonctionnement, soit "manual" soit "auto"
+            base_dir: Répertoire de base pour les fichiers Excel (par défaut: EXCEL_BASE_DIR)
         """
         self.mode = mode
+        self.base_dir = base_dir if base_dir else EXCEL_BASE_DIR
         self.test_folder_path = None
         self.conductance_file = None
         self.co2_temp_humidity_file = None
@@ -76,7 +78,7 @@ class ExcelHandler:
             # Exécution en tant que script Python
             application_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             
-        excel_folder_path = os.path.join(application_path, EXCEL_BASE_DIR)
+        excel_folder_path = os.path.join(application_path, self.base_dir)
         
         # Essayer d'abord le dossier de l'application (où se trouve l'exécutable)
         try:
@@ -94,7 +96,7 @@ class ExcelHandler:
             print(f"Failed to create directory in application folder: {e}, trying Documents folder...")
             try:
                 # Try Documents folder as fallback
-                user_docs = os.path.join(os.path.expanduser('~'), 'Documents', 'ASNR', EXCEL_BASE_DIR)
+                user_docs = os.path.join(os.path.expanduser('~'), 'Documents', 'ASNR', self.base_dir)
                 if not os.path.exists(user_docs):
                     os.makedirs(user_docs, exist_ok=True)
                     
@@ -109,10 +111,10 @@ class ExcelHandler:
                 import tempfile
                 temp_dir = tempfile.gettempdir()
                 print(f"Failed to create directory in Documents folder: {e}, using temp directory: {temp_dir}")
-                
+
                 mode_prefix = "Manual" if self.mode == "manual" else "Auto"
                 test_folder_name = f"Test-{mode_prefix}-{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}"
-                self.test_folder_path = os.path.join(temp_dir, 'ASNR', EXCEL_BASE_DIR, test_folder_name)
+                self.test_folder_path = os.path.join(temp_dir, 'ASNR', self.base_dir, test_folder_name)
                 
                 os.makedirs(os.path.dirname(self.test_folder_path), exist_ok=True)
                 os.makedirs(self.test_folder_path, exist_ok=True)

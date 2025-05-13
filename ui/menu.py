@@ -3,12 +3,23 @@ Interface utilisateur du menu pour le système de capteurs
 """
 
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 import subprocess
 import serial.tools.list_ports
 import os
 import sys
-from core.constants import EXCEL_BASE_DIR
+import importlib
+import inspect
+from core.constants import (
+    EXCEL_BASE_DIR,
+    # Constantes de conductance
+    STABILITY_DURATION, INCREASE_SLOPE_MIN, INCREASE_SLOPE_MAX,
+    DECREASE_SLOPE_THRESHOLD, SLIDING_WINDOW, R0_THRESHOLD,
+    REGENERATION_TEMP, TCONS_LOW, VALVE_DELAY, CONDUCTANCE_DECREASE_THRESHOLD,
+    # Constantes de CO2
+    CO2_STABILITY_THRESHOLD, CO2_STABILITY_DURATION, REGENERATION_DURATION,
+    CELL_VOLUME, CO2_INCREASE_THRESHOLD
+)
 
 class MenuUI:
     """Interface utilisateur du menu principal pour le système de capteurs"""
@@ -26,11 +37,16 @@ class MenuUI:
         self.other_baud_rate_var = tk.IntVar(value=230400)
         self.mode_manual_var = tk.IntVar(value=1)  # Présélection du mode manuel
         self.mode_auto_var = tk.IntVar()
-        
+
         # Measurement selection variables (for manual mode)
         self.measure_conductance_var = tk.IntVar(value=0)  # Conductance désactivée par défaut
         self.measure_co2_var = tk.IntVar(value=1)
         self.measure_regen_var = tk.IntVar(value=1)
+
+        # Options générales
+        self.auto_save_var = tk.IntVar(value=1)  # Sauvegardes automatiques - activé par défaut
+        self.save_data_var = tk.IntVar(value=1)  # Enregistrement des données - activé par défaut
+        self.custom_save_location_var = tk.IntVar(value=0)  # Emplacement personnalisé - désactivé par défaut
         
         # Set up UI elements
         self.setup_ui()
@@ -213,28 +229,74 @@ class MenuUI:
         self.measurement_frame = tk.LabelFrame(self.window, text="Sélection des mesures (Mode Manuel)")
         self.measurement_frame.grid(row=5, column=0, columnspan=2, padx=10, pady=10, sticky='ew')
         self.measurement_frame.grid_remove()  # Initially hidden
-        
+
         # Measurement options
         tk.Checkbutton(self.measurement_frame, text="Conductance", variable=self.measure_conductance_var).grid(row=0, column=0, sticky='w', padx=10, pady=5)
         tk.Checkbutton(self.measurement_frame, text="CO2 / Température / Humidité", variable=self.measure_co2_var).grid(row=1, column=0, sticky='w', padx=10, pady=5)
         tk.Checkbutton(self.measurement_frame, text="Régénération / Température", variable=self.measure_regen_var).grid(row=2, column=0, sticky='w', padx=10, pady=5)
+
+        # Options frame pour les paramètres généraux
+        options_frame = tk.LabelFrame(self.window, text="Options générales")
+        options_frame.grid(row=6, column=0, columnspan=2, padx=10, pady=10, sticky='ew')
+
+        # Options de sauvegarde
+        autosave_check = tk.Checkbutton(options_frame, text="Activer les sauvegardes automatiques", variable=self.auto_save_var)
+        autosave_check.grid(row=0, column=0, sticky='w', padx=10, pady=5)
+
+        savedata_check = tk.Checkbutton(options_frame, text="Enregistrer les données des mesures", variable=self.save_data_var)
+        savedata_check.grid(row=1, column=0, sticky='w', padx=10, pady=5)
+
+        # Variable pour stocker le chemin de sauvegarde personnalisé
+        self.save_location_path = tk.StringVar(value=EXCEL_BASE_DIR)
+
+        # Fonction pour afficher/masquer le sélecteur d'emplacement
+        def toggle_location_selector(*args):
+            if self.custom_save_location_var.get():
+                location_entry.grid(row=3, column=0, columnspan=1, sticky='ew', padx=10, pady=2)
+                browse_button.grid(row=3, column=1, sticky='w', padx=0, pady=2)
+            else:
+                location_entry.grid_remove()
+                browse_button.grid_remove()
+
+        # Fonction pour ouvrir le sélecteur de dossier
+        def browse_directory():
+            directory = filedialog.askdirectory(initialdir=self.save_location_path.get())
+            if directory:  # Si l'utilisateur a sélectionné un dossier
+                self.save_location_path.set(directory)
+
+        custom_location_check = tk.Checkbutton(options_frame, text="Choisir l'emplacement d'enregistrement",
+                                              variable=self.custom_save_location_var, command=toggle_location_selector)
+        custom_location_check.grid(row=2, column=0, sticky='w', padx=10, pady=5)
+
+        # Champ de texte pour afficher le chemin d'enregistrement
+        location_entry = tk.Entry(options_frame, textvariable=self.save_location_path, width=30)
+
+        # Bouton pour parcourir les dossiers
+        browse_button = tk.Button(options_frame, text="Parcourir...", command=browse_directory)
+
+        # Initialiser l'état de visibilité du sélecteur en fonction de l'état de la case à cocher
+        toggle_location_selector()
         
         # Button frame to hold refresh, launch and quit buttons
         button_frame = tk.Frame(self.window)
-        button_frame.grid(row=6, column=0, columnspan=2, pady=20)
-        
+        button_frame.grid(row=7, column=0, columnspan=2, pady=20)
+
         # Refresh ports button
         refresh_button = tk.Button(button_frame, text="Actualiser les ports", command=self.refresh_ports)
         refresh_button.pack(side=tk.LEFT, padx=10)
-        
+
+        # Configuration button for changing protocol constants
+        config_button = tk.Button(button_frame, text="Paramètres", command=self.open_config_window)
+        config_button.pack(side=tk.LEFT, padx=10)
+
         # Launch button
         launch_button = tk.Button(button_frame, text="Lancer le programme", command=self.launch_program)
         launch_button.pack(side=tk.LEFT, padx=10)
-        
+
         # Help button
         help_button = tk.Button(button_frame, text="Aide", command=self.open_documentation)
         help_button.pack(side=tk.LEFT, padx=10)
-        
+
         # Quit button
         quit_button = tk.Button(button_frame, text="Quitter", command=self.quit_application)
         quit_button.pack(side=tk.LEFT, padx=10)
@@ -401,24 +463,45 @@ class MenuUI:
         # Close the current window
         self.window.destroy()
         
+        # Get options state
+        auto_save = bool(self.auto_save_var.get())
+        save_data = bool(self.save_data_var.get())
+        custom_save_location = bool(self.custom_save_location_var.get())
+
+        # Récupérer le chemin de sauvegarde personnalisé si activé
+        save_location = self.save_location_path.get() if custom_save_location else EXCEL_BASE_DIR
+
         # Import and run directly instead of launching a new process
         if getattr(sys, 'frozen', False):
             # Running as executable
             if self.mode_auto_var.get():
                 # Import auto app dynamically
                 import auto_app
-                auto_app.main(arduino_port, arduino_baud_rate, other_port, other_baud_rate)
+                auto_app.main(
+                    arduino_port,
+                    arduino_baud_rate,
+                    other_port,
+                    other_baud_rate,
+                    auto_save=auto_save,
+                    save_data=save_data,
+                    custom_save_location=custom_save_location,
+                    save_location=save_location
+                )
             else:
                 # Import manual app dynamically
                 import manual_app
                 manual_app.main(
-                    arduino_port, 
-                    arduino_baud_rate, 
-                    other_port, 
+                    arduino_port,
+                    arduino_baud_rate,
+                    other_port,
                     other_baud_rate,
                     measure_conductance=measure_conductance,
                     measure_co2=measure_co2,
-                    measure_regen=measure_regen
+                    measure_regen=measure_regen,
+                    auto_save=auto_save,
+                    save_data=save_data,
+                    custom_save_location=custom_save_location,
+                    save_location=save_location
                 )
         else:
             # Running as script
@@ -426,19 +509,40 @@ class MenuUI:
                 # Auto mode
                 script_name = "auto_app.py"
                 script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), script_name)
-                command = [sys.executable, script_path, arduino_port, str(arduino_baud_rate), other_port, str(other_baud_rate)]
+                # Préparer les arguments de base
+                command = [
+                    sys.executable, script_path,
+                    arduino_port, str(arduino_baud_rate),
+                    other_port, str(other_baud_rate),
+                    "--auto_save", str(int(auto_save)),
+                    "--save_data", str(int(save_data)),
+                    "--custom_save_location", str(int(custom_save_location))
+                ]
+
+                # Ajouter le chemin de sauvegarde seulement si demandé
+                if custom_save_location and save_location:
+                    command.extend(["--save_location", save_location])
+                    print(f"Setting custom save location: {save_location}")
             else:
                 # Manual mode with measurement selections
                 script_name = "manual_app.py"
                 script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), script_name)
                 command = [
-                    sys.executable, script_path, 
-                    arduino_port, str(arduino_baud_rate), 
+                    sys.executable, script_path,
+                    arduino_port, str(arduino_baud_rate),
                     other_port, str(other_baud_rate),
                     "--measure_conductance", str(measure_conductance),
                     "--measure_co2", str(measure_co2),
-                    "--measure_regen", str(measure_regen)
+                    "--measure_regen", str(measure_regen),
+                    "--auto_save", str(int(auto_save)),
+                    "--save_data", str(int(save_data)),
+                    "--custom_save_location", str(int(custom_save_location))
                 ]
+
+                # Ajouter le chemin de sauvegarde seulement si demandé
+                if custom_save_location and save_location:
+                    command.extend(["--save_location", save_location])
+                    print(f"Setting custom save location: {save_location}")
             
             # Utiliser execv pour remplacer le processus actuel (pas de sous-processus)
             os.execv(sys.executable, command)
@@ -446,7 +550,7 @@ class MenuUI:
     def open_documentation(self):
         """Ouvre le fichier de documentation"""
         doc_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "documentation.md")
-        
+
         try:
             # Utiliser la commande appropriée selon le système d'exploitation
             if sys.platform.startswith('win'):
@@ -455,11 +559,19 @@ class MenuUI:
                 subprocess.call(['open', doc_path])
             else:  # linux
                 subprocess.call(['xdg-open', doc_path])
-                
+
             # Afficher un message de confirmation
             tk.messagebox.showinfo("Documentation", "Le fichier de documentation a été ouvert.")
         except Exception as e:
             tk.messagebox.showerror("Erreur", f"Impossible d'ouvrir la documentation: {e}")
+
+    def open_config_window(self):
+        """Ouvre la fenêtre de configuration des constantes"""
+        # Créer et afficher la fenêtre de configuration
+        config_window = ConstantsConfigWindow(self)
+
+        # Rendre la fenêtre modale (bloque l'interaction avec la fenêtre parent)
+        self.window.wait_window(config_window.window)
     
     def quit_application(self):
         """Ferme l'application proprement et termine le processus"""
@@ -470,3 +582,284 @@ class MenuUI:
     def run(self):
         """Exécuter la boucle principale de l'interface utilisateur"""
         self.window.mainloop()
+
+
+class ConstantsConfigWindow:
+    """Fenêtre de configuration des constantes pour les protocoles"""
+
+    def __init__(self, parent):
+        """
+        Initialise la fenêtre de configuration des constantes
+
+        Args:
+            parent: Fenêtre parente (MenuUI) qui a créé cette fenêtre
+        """
+        self.parent = parent
+
+        # Créer une nouvelle fenêtre
+        self.window = tk.Toplevel(parent.window)
+        self.window.title("Configuration des paramètres de protocole")
+        self.window.geometry("600x700")
+        self.window.resizable(True, True)
+        self.window.transient(parent.window)  # Cette fenêtre dépend de la fenêtre parent
+        self.window.grab_set()  # Bloque les interactions avec la fenêtre parent
+
+        # Dictionnaire pour stocker les entrées utilisateur
+        self.entries = {}
+
+        # Initialiser l'interface
+        self.setup_ui()
+
+    def setup_ui(self):
+        """Configurer l'interface utilisateur"""
+        # Zone de défilement pour contenir tous les paramètres
+        main_frame = tk.Frame(self.window)
+        main_frame.pack(fill=tk.BOTH, expand=1, padx=10, pady=10)
+
+        # Créer un canvas pour permettre le défilement
+        canvas = tk.Canvas(main_frame)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=1)
+
+        # Ajouter une barre de défilement
+        scrollbar = ttk.Scrollbar(main_frame, orient=tk.VERTICAL, command=canvas.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Configurer le canvas
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.bind('<Configure>', lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+        # Créer un frame à l'intérieur du canvas
+        content_frame = tk.Frame(canvas)
+        canvas.create_window((0, 0), window=content_frame, anchor="nw")
+
+        # Section des constantes de conductance
+        conductance_frame = ttk.LabelFrame(content_frame, text="Paramètres de détection de conductance")
+        conductance_frame.pack(fill=tk.X, expand=1, padx=5, pady=5)
+
+        conductance_params = [
+            ("STABILITY_DURATION", "Durée de stabilité (s)", STABILITY_DURATION, "Durée requise en secondes pour considérer la conductance comme stable"),
+            ("INCREASE_SLOPE_MIN", "Pente min. augmentation (µS/s)", INCREASE_SLOPE_MIN, "Seuil minimum pour la pente d'augmentation de conductance"),
+            ("INCREASE_SLOPE_MAX", "Pente max. augmentation (µS/s)", INCREASE_SLOPE_MAX, "Seuil maximum pour la pente d'augmentation de conductance"),
+            ("DECREASE_SLOPE_THRESHOLD", "Seuil pente décroissance (µS/s)", DECREASE_SLOPE_THRESHOLD, "Seuil négatif pour détecter une diminution de conductance"),
+            ("SLIDING_WINDOW", "Durée de la pente glissante (s)", SLIDING_WINDOW, "Durée de l'intervalle pour le calcul de la pente glissante"),
+            ("R0_THRESHOLD", "Seuil R0 (Ohms)", R0_THRESHOLD, "Seuil de résistance R0 en Ohms pour le calcul de conductance"),
+            ("CONDUCTANCE_DECREASE_THRESHOLD", "Seuil décroissance (µS)", CONDUCTANCE_DECREASE_THRESHOLD, "Seuil de décroissance de conductance en µS")
+        ]
+
+        for i, (const_name, label_text, current_value, tooltip) in enumerate(conductance_params):
+            row_frame = tk.Frame(conductance_frame)
+            row_frame.pack(fill=tk.X, padx=5, pady=2)
+
+            label = tk.Label(row_frame, text=label_text, width=25, anchor="w")
+            label.pack(side=tk.LEFT, padx=5)
+
+            entry = tk.Entry(row_frame, width=10)
+            entry.insert(0, str(current_value))
+            entry.pack(side=tk.LEFT, padx=5)
+
+            info_label = tk.Label(row_frame, text=tooltip, fg="gray", anchor="w")
+            info_label.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=1)
+
+            self.entries[const_name] = entry
+
+        # Section des constantes de températuree
+        temp_frame = ttk.LabelFrame(content_frame, text="Paramètres de température")
+        temp_frame.pack(fill=tk.X, expand=1, padx=5, pady=5)
+
+        temp_params = [
+            ("REGENERATION_TEMP", "Température de régénération (°C)", REGENERATION_TEMP, "Température en °C pour la régénération"),
+            ("TCONS_LOW", "Point de consigne bas (°C)", TCONS_LOW, "Point de consigne basse température en °C"),
+            ("VALVE_DELAY", "Délai vanne (s)", VALVE_DELAY, "Délai d'attente en secondes après opération d'ouverture/fermeture de vanne")
+        ]
+
+        for i, (const_name, label_text, current_value, tooltip) in enumerate(temp_params):
+            row_frame = tk.Frame(temp_frame)
+            row_frame.pack(fill=tk.X, padx=5, pady=2)
+
+            label = tk.Label(row_frame, text=label_text, width=25, anchor="w")
+            label.pack(side=tk.LEFT, padx=5)
+
+            entry = tk.Entry(row_frame, width=10)
+            entry.insert(0, str(current_value))
+            entry.pack(side=tk.LEFT, padx=5)
+
+            info_label = tk.Label(row_frame, text=tooltip, fg="gray", anchor="w")
+            info_label.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=1)
+
+            self.entries[const_name] = entry
+
+        # Section des constantes CO2
+        co2_frame = ttk.LabelFrame(content_frame, text="Paramètres du protocole CO2")
+        co2_frame.pack(fill=tk.X, expand=1, padx=5, pady=5)
+
+        co2_params = [
+            ("CO2_STABILITY_THRESHOLD", "Seuil stabilité CO2 (ppm)", CO2_STABILITY_THRESHOLD, "Variation maximale en ppm pour considérer le CO2 comme stable"),
+            ("CO2_STABILITY_DURATION", "Durée stabilité CO2 (s)", CO2_STABILITY_DURATION, "Durée en secondes pendant laquelle le CO2 doit être stable"),
+            ("REGENERATION_DURATION", "Durée régénération (s)", REGENERATION_DURATION, "Durée en secondes du maintien à haute température pendant la régénération"),
+            ("CELL_VOLUME", "Volume cellule (L)", CELL_VOLUME, "Volume de la cellule de mesure en litres pour le calcul de masse de carbone"),
+            ("CO2_INCREASE_THRESHOLD", "Seuil augmentation CO2 (ppm)", CO2_INCREASE_THRESHOLD, "Seuil d'augmentation de CO2 en ppm pour déclencher la détection")
+        ]
+
+        for i, (const_name, label_text, current_value, tooltip) in enumerate(co2_params):
+            row_frame = tk.Frame(co2_frame)
+            row_frame.pack(fill=tk.X, padx=5, pady=2)
+
+            label = tk.Label(row_frame, text=label_text, width=25, anchor="w")
+            label.pack(side=tk.LEFT, padx=5)
+
+            entry = tk.Entry(row_frame, width=10)
+            entry.insert(0, str(current_value))
+            entry.pack(side=tk.LEFT, padx=5)
+
+            info_label = tk.Label(row_frame, text=tooltip, fg="gray", anchor="w")
+            info_label.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=1)
+
+            self.entries[const_name] = entry
+
+        # Boutons de contrôle
+        button_frame = tk.Frame(self.window)
+        button_frame.pack(pady=10)
+
+        # Bouton pour réinitialiser aux valeurs par défaut
+        reset_button = tk.Button(button_frame, text="Réinitialiser aux valeurs par défaut", command=self.reset_values)
+        reset_button.pack(side=tk.LEFT, padx=5)
+
+        # Bouton pour sauvegarder
+        save_button = tk.Button(button_frame, text="Appliquer", command=self.save_values)
+        save_button.pack(side=tk.LEFT, padx=5)
+
+        # Bouton pour annuler
+        cancel_button = tk.Button(button_frame, text="Annuler", command=self.window.destroy)
+        cancel_button.pack(side=tk.LEFT, padx=5)
+
+    def reset_values(self):
+        """Réinitialise les champs aux valeurs par défaut"""
+        # Réinitialiser les valeurs de conductance
+        self.entries["STABILITY_DURATION"].delete(0, tk.END)
+        self.entries["STABILITY_DURATION"].insert(0, str(STABILITY_DURATION))
+
+        self.entries["INCREASE_SLOPE_MIN"].delete(0, tk.END)
+        self.entries["INCREASE_SLOPE_MIN"].insert(0, str(INCREASE_SLOPE_MIN))
+
+        self.entries["INCREASE_SLOPE_MAX"].delete(0, tk.END)
+        self.entries["INCREASE_SLOPE_MAX"].insert(0, str(INCREASE_SLOPE_MAX))
+
+        self.entries["DECREASE_SLOPE_THRESHOLD"].delete(0, tk.END)
+        self.entries["DECREASE_SLOPE_THRESHOLD"].insert(0, str(DECREASE_SLOPE_THRESHOLD))
+
+        self.entries["SLIDING_WINDOW"].delete(0, tk.END)
+        self.entries["SLIDING_WINDOW"].insert(0, str(SLIDING_WINDOW))
+
+        self.entries["R0_THRESHOLD"].delete(0, tk.END)
+        self.entries["R0_THRESHOLD"].insert(0, str(R0_THRESHOLD))
+
+        self.entries["CONDUCTANCE_DECREASE_THRESHOLD"].delete(0, tk.END)
+        self.entries["CONDUCTANCE_DECREASE_THRESHOLD"].insert(0, str(CONDUCTANCE_DECREASE_THRESHOLD))
+
+        # Réinitialiser les valeurs de température
+        self.entries["REGENERATION_TEMP"].delete(0, tk.END)
+        self.entries["REGENERATION_TEMP"].insert(0, str(REGENERATION_TEMP))
+
+        self.entries["TCONS_LOW"].delete(0, tk.END)
+        self.entries["TCONS_LOW"].insert(0, str(TCONS_LOW))
+
+        self.entries["VALVE_DELAY"].delete(0, tk.END)
+        self.entries["VALVE_DELAY"].insert(0, str(VALVE_DELAY))
+
+        # Réinitialiser les valeurs CO2
+        self.entries["CO2_STABILITY_THRESHOLD"].delete(0, tk.END)
+        self.entries["CO2_STABILITY_THRESHOLD"].insert(0, str(CO2_STABILITY_THRESHOLD))
+
+        self.entries["CO2_STABILITY_DURATION"].delete(0, tk.END)
+        self.entries["CO2_STABILITY_DURATION"].insert(0, str(CO2_STABILITY_DURATION))
+
+        self.entries["REGENERATION_DURATION"].delete(0, tk.END)
+        self.entries["REGENERATION_DURATION"].insert(0, str(REGENERATION_DURATION))
+
+        self.entries["CELL_VOLUME"].delete(0, tk.END)
+        self.entries["CELL_VOLUME"].insert(0, str(CELL_VOLUME))
+
+        self.entries["CO2_INCREASE_THRESHOLD"].delete(0, tk.END)
+        self.entries["CO2_INCREASE_THRESHOLD"].insert(0, str(CO2_INCREASE_THRESHOLD))
+
+    def save_values(self):
+        """Sauvegarde les valeurs modifiées pour la session en cours"""
+        try:
+            # Créer un dictionnaire avec les nouvelles valeurs
+            # Important: Convertir les valeurs dans le bon type (float, int)
+            new_values = {}
+
+            # Vérifier et récupérer les valeurs des constantes de conductance
+            for key in ["STABILITY_DURATION", "SLIDING_WINDOW", "R0_THRESHOLD", "CONDUCTANCE_DECREASE_THRESHOLD"]:
+                try:
+                    # Ces constantes sont des entiers ou des nombres à virgule
+                    value = self.entries[key].get().strip()
+                    if "*" in value:  # Gestion des expressions comme "2 * 60"
+                        new_values[key] = eval(value)
+                    else:
+                        new_values[key] = float(value)
+                        # Convertir en entier si c'est un nombre entier
+                        if new_values[key].is_integer():
+                            new_values[key] = int(new_values[key])
+                except (ValueError, SyntaxError) as e:
+                    messagebox.showerror("Erreur", f"Valeur invalide pour {key}: {e}")
+                    return
+
+            # Vérifier et récupérer les seuils de pente (qui sont des flottants)
+            for key in ["INCREASE_SLOPE_MIN", "INCREASE_SLOPE_MAX", "DECREASE_SLOPE_THRESHOLD"]:
+                try:
+                    value = self.entries[key].get().strip()
+                    new_values[key] = float(value)
+                except ValueError:
+                    messagebox.showerror("Erreur", f"Valeur invalide pour {key} (doit être un nombre décimal)")
+                    return
+
+            # Vérifier et récupérer les valeurs de température
+            for key in ["REGENERATION_TEMP", "TCONS_LOW", "VALVE_DELAY"]:
+                try:
+                    value = self.entries[key].get().strip()
+                    new_values[key] = float(value)
+                    # Convertir en entier si c'est un nombre entier
+                    if new_values[key].is_integer():
+                        new_values[key] = int(new_values[key])
+                except ValueError:
+                    messagebox.showerror("Erreur", f"Valeur invalide pour {key}")
+                    return
+
+            # Vérifier et récupérer les valeurs CO2
+            for key in ["CO2_STABILITY_THRESHOLD", "CO2_STABILITY_DURATION", "REGENERATION_DURATION", "CO2_INCREASE_THRESHOLD"]:
+                try:
+                    value = self.entries[key].get().strip()
+                    if "*" in value:  # Gestion des expressions comme "2 * 60"
+                        new_values[key] = eval(value)
+                    else:
+                        new_values[key] = float(value)
+                        # Convertir en entier si c'est un nombre entier
+                        if new_values[key].is_integer():
+                            new_values[key] = int(new_values[key])
+                except (ValueError, SyntaxError):
+                    messagebox.showerror("Erreur", f"Valeur invalide pour {key}")
+                    return
+
+            # CELL_VOLUME est toujours un flottant
+            try:
+                new_values["CELL_VOLUME"] = float(self.entries["CELL_VOLUME"].get().strip())
+            except ValueError:
+                messagebox.showerror("Erreur", "Valeur invalide pour CELL_VOLUME (doit être un nombre décimal)")
+                return
+
+            # Appliquer les nouvelles valeurs aux constantes globales
+            for key, value in new_values.items():
+                globals()[key] = value
+
+            # Modifier les constantes dans le module
+            import core.constants
+            for key, value in new_values.items():
+                setattr(core.constants, key, value)
+
+            # Fermer la fenêtre
+            messagebox.showinfo("Succès", "Les paramètres ont été appliqués pour cette session")
+            self.window.destroy()
+
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Une erreur est survenue: {str(e)}")

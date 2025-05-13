@@ -17,12 +17,13 @@ from devices.keithley_device import KeithleyDevice
 from devices.arduino_device import ArduinoDevice
 from devices.regen_device import RegenDevice
 from core.measurement_manager import MeasurementManager
-from core.constants import TCONS_LOW
+from core.constants import TCONS_LOW, EXCEL_BASE_DIR
 from data_handlers.excel_handler import ExcelHandler
 from ui.plot_manager import PlotManager
 from utils.helpers import parse_pin_states
 
-def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_rate=None):
+def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_rate=None,
+         auto_save=True, save_data=True, custom_save_location=False, save_location=None):
     """
     Point d'entrée principal pour l'application en mode automatique
     
@@ -38,16 +39,28 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
     
     # If parameters aren't provided, try to get them from command line
     if arduino_port is None:
-        # Check arguments
-        if len(sys.argv) != 5:
-            print("Usage: python auto_app.py <arduino_port> <arduino_baud_rate> <other_port> <other_baud_rate>")
+        # Check required arguments
+        if len(sys.argv) < 5:
+            print("Usage: python auto_app.py <arduino_port> <arduino_baud_rate> <other_port> <other_baud_rate> [--auto_save 0|1] [--save_data 0|1] [--custom_save_location 0|1] [--save_location path]")
             sys.exit(1)
         
-        # Parse arguments
+        # Parse required arguments
         arduino_port = sys.argv[1]
         arduino_baud_rate = int(sys.argv[2])
         other_port = sys.argv[3]
         other_baud_rate = int(sys.argv[4])
+
+        # Parse optional arguments
+        for i in range(5, len(sys.argv), 2):
+            if i+1 < len(sys.argv):
+                if sys.argv[i] == "--auto_save":
+                    auto_save = bool(int(sys.argv[i+1]))
+                elif sys.argv[i] == "--save_data":
+                    save_data = bool(int(sys.argv[i+1]))
+                elif sys.argv[i] == "--custom_save_location":
+                    custom_save_location = bool(int(sys.argv[i+1]))
+                elif sys.argv[i] == "--save_location":
+                    save_location = sys.argv[i+1]
     
     # Initialize devices
     keithley = KeithleyDevice()
@@ -73,8 +86,13 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
     # Initialize measurement manager
     measurements = MeasurementManager(keithley, arduino, regen)
     
-    # Initialize data handler
-    data_handler = ExcelHandler(mode="auto")
+    # Initialize data handler with custom save location if specified
+    if custom_save_location and save_location:
+        print(f"Using custom save location: {save_location}")
+        data_handler = ExcelHandler(mode="auto", base_dir=save_location)
+    else:
+        print(f"Using default save location: {EXCEL_BASE_DIR}")
+        data_handler = ExcelHandler(mode="auto")
     
     # Initialize plots
     plot_manager = PlotManager(mode="auto")

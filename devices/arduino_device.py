@@ -6,14 +6,15 @@ Auteur: Guillaume Pailloux
 
 import serial
 import time
+from core.constants import ARDUINO_DEFAULT_BAUD_RATE, ARDUINO_DEFAULT_TIMEOUT
 
 class ArduinoDevice:
     """Interface pour l'appareil Arduino qui mesure le CO2, la température et l'humidité"""
     
-    def __init__(self, port=None, baud_rate=115200, timeout=2):
+    def __init__(self, port=None, baud_rate=ARDUINO_DEFAULT_BAUD_RATE, timeout=ARDUINO_DEFAULT_TIMEOUT):
         """
         Initialise l'appareil Arduino
-        
+
         Args:
             port: Port série à connecter
             baud_rate: Vitesse en bauds pour la connexion série

@@ -997,18 +997,31 @@ class PlotManager:
     def update_raz_buttons_visibility(self, measurement_states):
         """
         Met à jour la visibilité des boutons de réinitialisation en fonction des états de mesure
-        
+
         Args:
             measurement_states: Dictionnaire avec les états de mesure
         """
         if self.mode == "manual":
-            for measurement, state in measurement_states.items():
+            # S'assurer que tous les états sont mis à jour, pas seulement ceux fournis
+            updated_states = {}
+
+            # Conserver les états précédents pour les mesures non spécifiées
+            for measurement in ['conductance', 'co2_temp_humidity', 'res_temp']:
+                button_name = f"raz_{measurement}"
+                if button_name in self.buttons:
+                    # État par défaut: bouton visible (mesure inactive)
+                    current_state = not self.buttons[button_name].ax.get_visible() if self.buttons[button_name].ax.get_visible() is not None else False
+                    # Mettre à jour uniquement si l'état est fourni
+                    updated_states[measurement] = measurement_states.get(measurement, current_state)
+
+            # Appliquer les mises à jour
+            for measurement, state in updated_states.items():
                 button_name = f"raz_{measurement}"
                 if button_name in self.buttons:
                     self.buttons[button_name].ax.set_visible(not state)
         else:
             self.buttons['raz_auto'].ax.set_visible(not measurement_states.get('auto', False))
-        
+
         self.fig.canvas.draw()
     
     def deactivate_movement_buttons(self):

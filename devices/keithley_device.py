@@ -7,7 +7,13 @@ Auteur: Guillaume Pailloux
 import time
 import pyvisa
 import sys
-from core.constants import KEITHLEY_COMMANDS, KEITHLEY_GPIB_ADDRESS
+from core.constants import (
+    KEITHLEY_COMMANDS,
+    KEITHLEY_GPIB_ADDRESS,
+    KEITHLEY_READ_TIMEOUT,
+    KEITHLEY_OPERATION_TIMEOUT,
+    KEITHLEY_VISA_ERROR_CLOSING_FAILED
+)
 
 class KeithleyDevice:
     """Interface pour l'électromètre Keithley 6517 permettant la mesure précise de résistance électrique"""
@@ -16,7 +22,7 @@ class KeithleyDevice:
     def _custom_excepthook(self, etype, evalue, etraceback):
         # Vérifie si l'erreur est une VisaIOError avec le code spécifique VI_ERROR_CLOSING_FAILED
         if etype == pyvisa.errors.VisaIOError and (
-            str(getattr(evalue, 'error_code', '')) == '-1073807338' or 
+            str(getattr(evalue, 'error_code', '')) == KEITHLEY_VISA_ERROR_CLOSING_FAILED or
             'VI_ERROR_CLOSING_FAILED' in str(evalue)
         ):
             if not hasattr(self, '_closing_error_handled') or not self._closing_error_handled:
@@ -90,7 +96,7 @@ class KeithleyDevice:
     def read_resistance(self):
         """
         Lire la résistance depuis le Keithley
-        
+
         Returns:
             float: Valeur de résistance en ohms, ou None en cas d'erreur
         """
@@ -99,17 +105,17 @@ class KeithleyDevice:
             original_timeout = None
             if self.device:
                 original_timeout = self.device.timeout
-                self.device.timeout = 5000  # 5 secondes
-                
+                self.device.timeout = KEITHLEY_READ_TIMEOUT
+
             # Lecture de la résistance
             response = self.device.query(KEITHLEY_COMMANDS["READ_FRESH"])
             data = response.split(',')
             resistance = float(data[0].replace('NOHM', '').replace('UOHM', '').strip())
-            
+
             # Restaurer le timeout original
             if original_timeout is not None:
                 self.device.timeout = original_timeout
-                
+
             return resistance
         except pyvisa.errors.VisaIOError as e:
             # Erreur spécifique de communication VISA (timeout, etc.)
@@ -141,17 +147,17 @@ class KeithleyDevice:
             original_timeout = None
             if self.device:
                 original_timeout = self.device.timeout
-                self.device.timeout = 3000  # 3 secondes
-                
+                self.device.timeout = KEITHLEY_OPERATION_TIMEOUT
+
             self.device.write(KEITHLEY_COMMANDS["OUTPUT_ON"])
-            
+
             # Au lieu de bloquer avec time.sleep, on continue immédiatement
             # Définir un délai plus long pour la prochaine opération si nécessaire
-            
+
             # Restaurer le timeout original
             if original_timeout is not None:
                 self.device.timeout = original_timeout
-                
+
             return True
         except pyvisa.errors.VisaIOError as e:
             # Erreur spécifique de communication VISA (timeout, etc.)
@@ -169,17 +175,17 @@ class KeithleyDevice:
             original_timeout = None
             if self.device:
                 original_timeout = self.device.timeout
-                self.device.timeout = 3000  # 3 secondes
-                
+                self.device.timeout = KEITHLEY_OPERATION_TIMEOUT
+
             self.device.write(KEITHLEY_COMMANDS["OUTPUT_OFF"])
-            
+
             # Au lieu de bloquer avec time.sleep, on continue immédiatement
             # Définir un délai plus long pour la prochaine opération si nécessaire
-            
+
             # Restaurer le timeout original
             if original_timeout is not None:
                 self.device.timeout = original_timeout
-                
+
             return True
         except pyvisa.errors.VisaIOError as e:
             # Erreur spécifique de communication VISA (timeout, etc.)
@@ -200,15 +206,15 @@ class KeithleyDevice:
                     # On supprime le délai bloquant
                 except:
                     print("Avertissement: Impossible de désactiver la sortie Keithley pendant la fermeture")
-                
+
                 # Définir un timeout plus long pour la fermeture
-                self.device.timeout = 3000  # 3 secondes
+                self.device.timeout = KEITHLEY_OPERATION_TIMEOUT
                 self.device.close()
                 self.device = None  # Libérer explicitement la référence
                 return True
             except pyvisa.errors.VisaIOError as e:
-                # Vérifier si c'est l'erreur de fermeture spécifique (VI_ERROR_CLOSING_FAILED = -1073807338)
-                if str(e.error_code) == '-1073807338' or 'VI_ERROR_CLOSING_FAILED' in str(e):
+                # Vérifier si c'est l'erreur de fermeture spécifique (VI_ERROR_CLOSING_FAILED)
+                if str(e.error_code) == KEITHLEY_VISA_ERROR_CLOSING_FAILED or 'VI_ERROR_CLOSING_FAILED' in str(e):
                     # Marquer que cette erreur a été gérée pour éviter les messages d'erreur lors du garbage collection
                     self._closing_error_handled = True
                     print("Info: Appareil Keithley déconnecté ou retiré.")
@@ -233,7 +239,7 @@ class KeithleyDevice:
                 sys.excepthook = self._original_excepthook
         except pyvisa.errors.VisaIOError as e:
             # Intercepter spécifiquement l'erreur VI_ERROR_CLOSING_FAILED
-            if str(getattr(e, 'error_code', '')) == '-1073807338' or 'VI_ERROR_CLOSING_FAILED' in str(e):
+            if str(getattr(e, 'error_code', '')) == KEITHLEY_VISA_ERROR_CLOSING_FAILED or 'VI_ERROR_CLOSING_FAILED' in str(e):
                 self._closing_error_handled = True
                 print("Info: Appareil Keithley déconnecté lors de la fermeture du programme.")
             # Ne pas propager l'exception pour éviter le traceback

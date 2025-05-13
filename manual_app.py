@@ -17,9 +17,11 @@ from devices.regen_device import RegenDevice
 from core.measurement_manager import MeasurementManager
 from data_handlers.excel_handler import ExcelHandler
 from ui.plot_manager import PlotManager
+from core.constants import EXCEL_BASE_DIR
 
 def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_rate=None,
-         measure_conductance=1, measure_co2=1, measure_regen=1):
+         measure_conductance=1, measure_co2=1, measure_regen=1, auto_save=True, save_data=True,
+         custom_save_location=False, save_location=None):
     """
     Point d'entrée principal pour l'application en mode manuel
     
@@ -37,7 +39,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
     if arduino_port is None:
         # Vérifier les arguments requis
         if len(sys.argv) < 5:
-            print("Usage: python manual_app.py <arduino_port> <arduino_baud_rate> <other_port> <other_baud_rate> [--measure_conductance 0|1] [--measure_co2 0|1] [--measure_regen 0|1]")
+            print("Usage: python manual_app.py <arduino_port> <arduino_baud_rate> <other_port> <other_baud_rate> [--measure_conductance 0|1] [--measure_co2 0|1] [--measure_regen 0|1] [--auto_save 0|1] [--save_data 0|1] [--custom_save_location 0|1] [--save_location path]")
             sys.exit(1)
         
         # Analyser les arguments requis
@@ -55,6 +57,14 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                     measure_co2 = int(sys.argv[i+1])
                 elif sys.argv[i] == "--measure_regen":
                     measure_regen = int(sys.argv[i+1])
+                elif sys.argv[i] == "--auto_save":
+                    auto_save = bool(int(sys.argv[i+1]))
+                elif sys.argv[i] == "--save_data":
+                    save_data = bool(int(sys.argv[i+1]))
+                elif sys.argv[i] == "--custom_save_location":
+                    custom_save_location = bool(int(sys.argv[i+1]))
+                elif sys.argv[i] == "--save_location":
+                    save_location = sys.argv[i+1]
     
     # Initialize devices (selon les mesures sélectionnées)
     arduino = None
@@ -240,8 +250,13 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
     # Initialize measurement manager
     measurements = MeasurementManager(keithley, arduino, regen)
     
-    # Initialize data handler
-    data_handler = ExcelHandler(mode="manual")
+    # Initialize data handler with custom save location if specified
+    if custom_save_location and save_location:
+        print(f"Using custom save location: {save_location}")
+        data_handler = ExcelHandler(mode="manual", base_dir=save_location)
+    else:
+        print(f"Using default save location: {EXCEL_BASE_DIR}")
+        data_handler = ExcelHandler(mode="manual")
     
     # Initialize plots
     plot_manager = PlotManager(mode="manual")
@@ -1191,7 +1206,14 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                     measure_co2=True,  # Maintenant disponible
                     measure_regen=bool(measure_regen)
                 )
-                
+
+                # Mettre à jour l'état des boutons RAZ pour préserver les états actuels des mesures
+                plot_manager.update_raz_buttons_visibility({
+                    'conductance': measure_conductance_active,
+                    'co2_temp_humidity': measure_co2_temp_humidity_active,
+                    'res_temp': measure_res_temp_active
+                })
+
                 # Si on était en train de mesurer le CO2, il faut redémarrer la mesure
                 if measure_co2_temp_humidity_active:
                     toggle_co2_temp_humidity(None)  # Arrêter
@@ -1359,7 +1381,14 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                     measure_co2=bool(measure_co2),
                     measure_regen=True  # Maintenant disponible
                 )
-                
+
+                # Mettre à jour l'état des boutons RAZ pour préserver les états actuels des mesures
+                plot_manager.update_raz_buttons_visibility({
+                    'conductance': measure_conductance_active,
+                    'co2_temp_humidity': measure_co2_temp_humidity_active,
+                    'res_temp': measure_res_temp_active
+                })
+
                 # Si on était en train de mesurer la température, il faut redémarrer la mesure
                 if measure_res_temp_active:
                     toggle_res_temp(None)  # Arrêter
@@ -1478,7 +1507,14 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                     measure_co2=bool(measure_co2),
                     measure_regen=bool(measure_regen)
                 )
-                
+
+                # Mettre à jour l'état des boutons RAZ pour préserver les états actuels des mesures
+                plot_manager.update_raz_buttons_visibility({
+                    'conductance': measure_conductance_active,
+                    'co2_temp_humidity': measure_co2_temp_humidity_active,
+                    'res_temp': measure_res_temp_active
+                })
+
                 # Si on était en train de mesurer la conductance, il faut redémarrer la mesure
                 if measure_conductance_active:
                     toggle_conductance(None)  # Arrêter

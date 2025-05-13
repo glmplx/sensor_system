@@ -10,7 +10,8 @@ import pyvisa
 from core.constants import (
     INCREASE_SLOPE_MIN, INCREASE_SLOPE_MAX, STABILITY_DURATION,
     SLIDING_WINDOW, R0_THRESHOLD, REGENERATION_TEMP, TCONS_LOW, VALVE_DELAY,
-    CO2_STABILITY_THRESHOLD, CO2_STABILITY_DURATION, REGENERATION_DURATION
+    CO2_STABILITY_THRESHOLD, CO2_STABILITY_DURATION, REGENERATION_DURATION,
+    CONDUCTANCE_DECREASE_THRESHOLD, CO2_INCREASE_THRESHOLD
 )
 
 class MeasurementManager:
@@ -862,7 +863,7 @@ class MeasurementManager:
             
         # Vérifie si la conductance actuelle est inférieure à 5 µS
         current_conductance = self.conductanceList[-1]
-        if current_conductance < 5.0:
+        if current_conductance < CONDUCTANCE_DECREASE_THRESHOLD:
             # Marquer la détection de la décroissance (nouveau)
             if not self.conductance_decrease_detected:
                 self.conductance_decrease_detected = True
@@ -2023,7 +2024,7 @@ class MeasurementManager:
             # Détection de l'augmentation CO2 (peut se faire à tout moment)
             if not self.co2_increase_detected and self.co2_base_value is not None:
                 current_co2 = self.values_co2[-1]
-                if current_co2 - self.co2_base_value >= 5:  # Seuil d'augmentation
+                if current_co2 - self.co2_base_value >= CO2_INCREASE_THRESHOLD:  # Seuil d'augmentation
                     self.co2_increase_detected = True
                     self.regeneration_timestamps['co2_increase_detected'] = current_time - self.start_time_co2_temp_humidity
                     print(f"Augmentation CO2 détectée: {current_co2 - self.co2_base_value:.1f} ppm")
