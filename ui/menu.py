@@ -548,22 +548,102 @@ class MenuUI:
             os.execv(sys.executable, command)
     
     def open_documentation(self):
-        """Ouvre le fichier de documentation"""
-        doc_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "documentation.md")
+        """Lance mkdocs serve et ouvre la documentation dans un navigateur"""
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        mkdocs_path = os.path.join(base_dir, "mkdocs.yml")
 
+        if not os.path.exists(mkdocs_path):
+            tk.messagebox.showerror("Erreur", "Fichier mkdocs.yml non trouvé. Veuillez exécuter mkdocs_script.py d'abord.")
+            return
+
+        # Essayer de lancer mkdocs serve
         try:
-            # Utiliser la commande appropriée selon le système d'exploitation
-            if sys.platform.startswith('win'):
-                os.startfile(doc_path)
-            elif sys.platform.startswith('darwin'):  # macOS
-                subprocess.call(['open', doc_path])
-            else:  # linux
-                subprocess.call(['xdg-open', doc_path])
+            import threading
+            import webbrowser
+            import time
 
-            # Afficher un message de confirmation
-            tk.messagebox.showinfo("Documentation", "Le fichier de documentation a été ouvert.")
+            # Variable pour communiquer entre les threads
+            server_ready = threading.Event()
+
+            # Fonction pour lancer mkdocs serve dans un thread séparé
+            def run_mkdocs_server():
+                os.chdir(base_dir)  # Changer le répertoire de travail
+                try:
+                    # Lancer mkdocs serve
+                    process = subprocess.Popen(
+                        ["mkdocs", "serve"],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        universal_newlines=True,
+                        shell=sys.platform.startswith('win')
+                    )
+
+                    print("Serveur MkDocs en cours de démarrage...")
+
+                    # Lire la sortie pour les messages d'erreur ou le port
+                    for line in process.stdout:
+                        print(line.strip())
+                        # Si la ligne contient "Documentation built" ou "Serving on", le serveur est prêt
+                        if "Documentation built" in line or "Serving on" in line:
+                            server_ready.set()
+                            break
+                except Exception as e:
+                    print(f"Erreur lors du lancement de mkdocs serve: {e}")
+                    server_ready.set()  # Signaler même en cas d'erreur pour ne pas bloquer le thread principal
+
+            # Lancer le serveur dans un thread séparé
+            server_thread = threading.Thread(target=run_mkdocs_server, daemon=True)
+            server_thread.start()
+
+            # Attendre jusqu'à 5 secondes maximum pour que le serveur soit prêt
+            is_ready = server_ready.wait(timeout=1.0)
+            if not is_ready:
+                print("Avertissement: Serveur MkDocs n'a pas encore signalé sa disponibilité. Poursuite quand même...")
+
+            # Ouvrir l'URL dans le navigateur
+            def open_browser():
+                url = "http://127.0.0.1:8000/"  # URL par défaut pour mkdocs serve
+                webbrowser.open(url)
+                print(f"Documentation ouverte dans le navigateur: {url}")
+
+            # Exécuter l'action dans le thread principal
+            self.window.after(100, open_browser)
+
+            tk.messagebox.showinfo(
+                "Documentation",
+                "Le serveur MkDocs a été démarré sur le port 8000.\n"
+                "La documentation a été ouverte dans votre navigateur.\n\n"
+                "Note: Le serveur s'arrêtera automatiquement à la fermeture de l'application."
+            )
+
         except Exception as e:
-            tk.messagebox.showerror("Erreur", f"Impossible d'ouvrir la documentation: {e}")
+            # Si mkdocs ne fonctionne pas, essayer d'ouvrir le fichier directement
+            print(f"Erreur avec mkdocs serve: {e}")
+            doc_path = os.path.join(base_dir, "docs", "index.md")
+
+            try:
+                # Utiliser la commande appropriée selon le système d'exploitation
+                if sys.platform.startswith('win'):
+                    os.startfile(doc_path)
+                elif sys.platform.startswith('darwin'):  # macOS
+                    subprocess.call(['open', doc_path])
+                else:  # linux
+                    subprocess.call(['xdg-open', doc_path])
+
+                # Plus besoin d'ouvrir Google dans un autre onglet
+
+                tk.messagebox.showinfo(
+                    "Documentation",
+                    "La commande mkdocs serve a échoué.\nLes fichiers de documentation ont été ouverts directement.\n"
+                    "Pour une meilleure expérience, installez MkDocs: pip install mkdocs mkdocs-material"
+                )
+            except Exception as e2:
+                tk.messagebox.showerror(
+                    "Erreur",
+                    f"Impossible d'ouvrir la documentation: {str(e)}\n{str(e2)}\n\n"
+                    f"Vous pouvez lancer manuellement: mkdocs serve\n"
+                    f"Puis ouvrir http://127.0.0.1:8000/ dans votre navigateur."
+                )
 
     def open_config_window(self):
         """Ouvre la fenêtre de configuration des constantes"""
