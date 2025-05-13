@@ -358,10 +358,10 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                 data_handler.save_conductance_data(
                     measurements.timeList,
                     measurements.conductanceList,
-                    measurements.resistanceList
+                    measurements.resistanceList,
                 )
         
-        # Si on reprend après pause
+        # Si on reprend après pause - NE PAS SAUVEGARDER ici
         if not previous_state and measure_conductance_active and measurements.pause_time_conductance is not None:
             current_time = time.time()
             pause_duration = current_time - measurements.pause_time_conductance
@@ -375,7 +375,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
             measure_conductance_active,
             measure_res_temp_active
         )
-    
+
     def toggle_co2_temp_humidity(event):
         nonlocal measure_co2_temp_humidity_active, co2_temp_humidity_file_initialized
         previous_state = measure_co2_temp_humidity_active
@@ -398,10 +398,10 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                     measurements.timestamps_temp,
                     measurements.values_temp,
                     measurements.timestamps_humidity,
-                    measurements.values_humidity
+                    measurements.values_humidity,
                 )
         
-        # Si on reprend après pause
+        # Si on reprend après pause - NE PAS SAUVEGARDER ici
         if not previous_state and measure_co2_temp_humidity_active and measurements.pause_time_co2_temp_humidity is not None:
             current_time = time.time()
             pause_duration = current_time - measurements.pause_time_co2_temp_humidity
@@ -415,7 +415,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
             measure_conductance_active,
             measure_res_temp_active
         )
-    
+
     def toggle_res_temp(event):
         nonlocal measure_res_temp_active, temp_res_file_initialized
         previous_state = measure_res_temp_active
@@ -433,10 +433,10 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                 data_handler.save_temp_res_data(
                     measurements.timestamps_res_temp,
                     measurements.temperatures,
-                    measurements.Tcons_values
+                    measurements.Tcons_values,
                 )
         
-        # Si on reprend après pause
+        # Si on reprend après pause - NE PAS SAUVEGARDER ici
         if not previous_state and measure_res_temp_active and measurements.pause_time_res_temp is not None:
             current_time = time.time()
             pause_duration = current_time - measurements.pause_time_res_temp
@@ -450,17 +450,16 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
             measure_conductance_active,
             measure_res_temp_active
         )
-        
-    def update_regeneration_button_state():
-        """Met à jour l'état des boutons de protocole en fonction des mesures actives"""
-        # Use the new method to update protocol button states
-        plot_manager.update_protocol_button_states(
-            measure_co2_temp_humidity_active,
-            measure_conductance_active,
-            measure_res_temp_active
-        )
     
     def raz_conductance(event):
+        # Sauvegarder les données courantes avant RAZ
+        if measurements.timeList and len(measurements.timeList) > 0:
+            data_handler.save_conductance_data(
+                measurements.timeList,
+                measurements.conductanceList,
+                measurements.resistanceList,
+            )
+        
         # Préparer les données pour l'essai cumulé sans créer de nouvelle feuille
         if measurements.timeList and len(measurements.timeList) > 0:
             data_handler.raz_conductance_data(
@@ -476,19 +475,29 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         plot_manager.update_conductance_plot([], [])
         plot_manager.update_detection_indicators(False, False)
         
-        # Ne pas réinitialiser l'indicateur de temps de percolation lors d'un RAZ
-        # Si measurements.increase_time existe encore, afficher cette valeur, sinon afficher 0
         if 'percolation_time_display' in plot_manager.indicators:
             ax_percolation_time = plot_manager.indicators['percolation_time_display']
             ax_percolation_time.clear()
-            # Utiliser la valeur de increase_time si elle existe, sinon afficher 0
             perco_value = measurements.increase_time if measurements.increase_time is not None else 0
             ax_percolation_time.text(0.5, 0.5, f"T perco: {perco_value:.1f} s", 
-                                   ha="center", va="center", transform=ax_percolation_time.transAxes)
+                                ha="center", va="center", transform=ax_percolation_time.transAxes)
             ax_percolation_time.axis('off')
             ax_percolation_time.figure.canvas.draw_idle()
-    
+
     def raz_co2_temp_humidity(event):
+        # Sauvegarder les données courantes avant RAZ
+        if (measurements.timestamps_co2 and len(measurements.timestamps_co2) > 0) or \
+        (measurements.timestamps_temp and len(measurements.timestamps_temp) > 0) or \
+        (measurements.timestamps_humidity and len(measurements.timestamps_humidity) > 0):
+            data_handler.save_co2_temp_humidity_data(
+                measurements.timestamps_co2,
+                measurements.values_co2,
+                measurements.timestamps_temp,
+                measurements.values_temp,
+                measurements.timestamps_humidity,
+                measurements.values_humidity,
+            )
+        
         # Préparer les données pour l'essai cumulé
         if (measurements.timestamps_co2 and len(measurements.timestamps_co2) > 0) or \
         (measurements.timestamps_temp and len(measurements.timestamps_temp) > 0) or \
@@ -505,8 +514,16 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         # Réinitialiser les données courantes
         measurements.reset_data("co2_temp_humidity")
         plot_manager.update_co2_temp_humidity_plot([], [], [], [], [], [])
-    
+
     def raz_res_temp(event):
+        # Sauvegarder les données courantes avant RAZ
+        if measurements.timestamps_res_temp and len(measurements.timestamps_res_temp) > 0:
+            data_handler.save_temp_res_data(
+                measurements.timestamps_res_temp,
+                measurements.temperatures,
+                measurements.Tcons_values,
+            )
+        
         # Préparer les données pour l'essai cumulé
         if measurements.timestamps_res_temp and len(measurements.timestamps_res_temp) > 0:
             data_handler.raz_temp_res_data(

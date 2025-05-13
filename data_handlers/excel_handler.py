@@ -37,6 +37,17 @@ class ExcelHandler:
         self.conductance_series_count = 0
         self.co2_temp_humidity_series_count = 0 
         self.temp_res_series_count = 0
+
+        # Pour suivre les feuilles actives
+        self.active_conductance_sheet = None
+        self.active_co2_temp_humidity_sheet = None
+        self.active_temp_res_sheet = None
+        
+        # Pour indiquer si un RAZ a été effectué et si une nouvelle feuille est nécessaire
+        self.new_conductance_sheet_needed = True
+        self.new_co2_temp_humidity_sheet_needed = True  
+        self.new_temp_res_sheet_needed = True
+
         
         # Stocke les données accumulées entre les sessions de réinitialisation (RAZ)
         self.accumulated_conductance_data = {
@@ -221,7 +232,8 @@ class ExcelHandler:
             
             
             # Mettre à jour "Essais cumulés" si nécessaire et qu'on a plus d'une feuille de données
-            if self._should_create_cumulative_sheet(file_path):
+            # On ne met pas à jour la feuille cumulée si le nom de feuille est "AutoSave"
+            if self._should_create_cumulative_sheet(file_path) and sheet_name != "AutoSave":
                 # Sauvegarder avant de mettre à jour la feuille cumulée
                 wb.save(file_path)
                 self._update_cumulative_sheet(file_path)
@@ -273,8 +285,8 @@ class ExcelHandler:
             # Charger le fichier Excel
             wb = load_workbook(file_path)
             
-            # Déterminer les feuilles de données (excluant celle cumulée et la temporaire)
-            data_sheets = [s for s in wb.sheetnames if s != "Essais cumulés" and s != "_temp"]
+            # Déterminer les feuilles de données (excluant celle cumulée, la temporaire et AutoSave)
+            data_sheets = [s for s in wb.sheetnames if s != "Essais cumulés" and s != "_temp" and s != "AutoSave"]
             
             # Supprimer l'ancienne feuille "Essais cumulés" si elle existe
             if "Essais cumulés" in wb.sheetnames:
@@ -311,11 +323,29 @@ class ExcelHandler:
             
         except Exception as e:
             print(f"Erreur lors de la mise à jour de la feuille cumulée: {e}", exc_info=True)
+
+    def raz_conductance_data(self, timeList, conductanceList, resistanceList):
+        """Prépare les données pour un nouvel essai sans sauvegarder immédiatement"""
+        if timeList and len(timeList) > 0:
+            # Ajouter aux données accumulées
+            lastTime = 0
+            if self.accumulated_conductance_data['Temps (s)']:
+                lastTime = self.accumulated_conductance_data['Temps (s)'][-1]
+            
+            self.accumulated_conductance_data['Minutes'].extend([(lastTime + t) / 60.0 for t in timeList])
+            self.accumulated_conductance_data['Temps (s)'].extend([lastTime + t for t in timeList])
+            self.accumulated_conductance_data['Conductance (µS)'].extend(conductanceList)
+            self.accumulated_conductance_data['Resistance (Ohms)'].extend(resistanceList)
+            
+            # Marquer qu'une nouvelle feuille sera nécessaire au prochain enregistrement
+            self.new_conductance_sheet_needed = True
+        
+        return True
     
     def raz_co2_temp_humidity_data(self, co2_timestamps, co2_values, temp_timestamps, temp_values, humidity_timestamps, humidity_values):
         """Prépare les données CO2/temp/humidity pour un nouvel essai"""
         if co2_timestamps and len(co2_timestamps) > 0:
-            # Ajouter aux données accumulées sans créer de nouvelle feuille
+            # Ajouter aux données accumulées
             lastTime = 0
             if self.accumulated_co2_temp_humidity_data['Temps (s)']:
                 lastTime = self.accumulated_co2_temp_humidity_data['Temps (s)'][-1]
@@ -327,13 +357,16 @@ class ExcelHandler:
             self.accumulated_co2_temp_humidity_data['CO2 (ppm)'].extend(co2_values)
             self.accumulated_co2_temp_humidity_data['Température (°C)'].extend(temp_values)
             self.accumulated_co2_temp_humidity_data['Humidité (%)'].extend(humidity_values)
+            
+            # Marquer qu'une nouvelle feuille sera nécessaire au prochain enregistrement
+            self.new_co2_temp_humidity_sheet_needed = True
         
         return True
 
     def raz_temp_res_data(self, timestamps, temperatures, tcons_values):
         """Prépare les données temp/resistance pour un nouvel essai"""
         if timestamps and len(timestamps) > 0:
-            # Ajouter aux données accumulées sans créer de nouvelle feuille
+            # Ajouter aux données accumulées
             lastTime = 0
             if self.accumulated_temp_res_data['Temps (s)']:
                 lastTime = self.accumulated_temp_res_data['Temps (s)'][-1]
@@ -342,21 +375,9 @@ class ExcelHandler:
             self.accumulated_temp_res_data['Temps (s)'].extend([lastTime + t for t in timestamps])
             self.accumulated_temp_res_data['Température mesurée'].extend(temperatures)
             self.accumulated_temp_res_data['Tcons'].extend(tcons_values)
-        
-        return True
-    
-    def raz_conductance_data(self, timeList, conductanceList, resistanceList):
-        """Prépare les données pour un nouvel essai sans sauvegarder immédiatement"""
-        if timeList and len(timeList) > 0:
-            # Ajouter aux données accumulées sans créer de nouvelle feuille
-            lastTime = 0
-            if self.accumulated_conductance_data['Temps (s)']:
-                lastTime = self.accumulated_conductance_data['Temps (s)'][-1]
             
-            self.accumulated_conductance_data['Minutes'].extend([(lastTime + t) / 60.0 for t in timeList])
-            self.accumulated_conductance_data['Temps (s)'].extend([lastTime + t for t in timeList])
-            self.accumulated_conductance_data['Conductance (µS)'].extend(conductanceList)
-            self.accumulated_conductance_data['Resistance (Ohms)'].extend(resistanceList)
+            # Marquer qu'une nouvelle feuille sera nécessaire au prochain enregistrement
+            self.new_temp_res_sheet_needed = True
         
         return True
     
@@ -379,43 +400,118 @@ class ExcelHandler:
         if not timeList or len(timeList) == 0:
             return False
         
-        # Si aucun nom de feuille n'est fourni, en créer un avec l'horodatage
-        if sheet_name is None:
-            sheet_name = f"Cond_{datetime.now().strftime('%H%M%S')}"
+        # Déterminer si on doit créer une nouvelle feuille ou utiliser l'existante
+        if sheet_name == "AutoSave":
+            # Pour les autosaves, toujours utiliser la feuille AutoSave
+            pass
+        elif not self.new_conductance_sheet_needed and self.active_conductance_sheet:
+            # Utiliser la feuille active si pas besoin de nouvelle feuille
+            sheet_name = self.active_conductance_sheet
+        else:
+            # Si aucun nom de feuille n'est fourni ou si une nouvelle est nécessaire, créer un nom
+            if sheet_name is None:
+                sheet_name = f"Cond_{datetime.now().strftime('%H%M%S')}"
+                
+            # Vérifier si cette feuille existe déjà
+            try:
+                wb = load_workbook(self.conductance_file)
+                if sheet_name in wb.sheetnames and sheet_name != "AutoSave":
+                    # Génère un nom alternatif en ajoutant un suffixe (sauf pour AutoSave)
+                    sheet_name = f"{sheet_name}_{self.conductance_series_count}"
+            except Exception as e:
+                print(f"Warning: Couldn't check for duplicate sheet names: {e}")
+                
+            # Mémoriser comme feuille active
+            self.active_conductance_sheet = sheet_name
+            self.new_conductance_sheet_needed = False
         
-        # Vérifier si cette feuille existe déjà
+        # Définir les données à sauvegarder
+        data = {}
+        
+        # Pour les données de la feuille courante, vérifier s'il faut ajouter le décalage temporel
         try:
-            wb = load_workbook(self.conductance_file)
-            if sheet_name in wb.sheetnames and sheet_name != "AutoSave":
-                # Génère un nom alternatif en ajoutant un suffixe (sauf pour AutoSave)
-                sheet_name = f"{sheet_name}_{self.conductance_series_count}"
+            if sheet_name != "AutoSave" and sheet_name in load_workbook(self.conductance_file).sheetnames:
+                # La feuille existe déjà, il faut maintenir la continuité temporelle
+                wb = load_workbook(self.conductance_file)
+                ws = wb[sheet_name]
+                
+                # Déterminer le dernier temps enregistré
+                last_row = ws.max_row
+                if last_row > 1:  # Si la feuille contient déjà des données
+                    last_time = ws.cell(row=last_row, column=2).value  # Colonne 2 = Temps (s)
+                    if last_time is not None:
+                        # Ajuster les timestamps pour continuer après le dernier point
+                        data['Minutes'] = [(last_time + t) / 60.0 for t in timeList]
+                        data['Temps (s)'] = [last_time + t for t in timeList]
+                    else:
+                        data['Minutes'] = [t / 60.0 for t in timeList]
+                        data['Temps (s)'] = timeList
+                else:
+                    data['Minutes'] = [t / 60.0 for t in timeList]
+                    data['Temps (s)'] = timeList
+            else:
+                # Nouvelle feuille ou AutoSave
+                data['Minutes'] = [t / 60.0 for t in timeList]
+                data['Temps (s)'] = timeList
         except Exception as e:
-            print(f"Warning: Couldn't check for duplicate sheet names: {e}")
+            print(f"Error checking for existing data: {e}")
+            data['Minutes'] = [t / 60.0 for t in timeList]
+            data['Temps (s)'] = timeList
         
-        # Calculate last time point for cumulative data continuation
-        lastTime = 0
-        if self.accumulated_conductance_data['Temps (s)'] and len(self.accumulated_conductance_data['Temps (s)']) > 0:
-            lastTime = self.accumulated_conductance_data['Temps (s)'][-1]
+        data['Conductance (µS)'] = conductanceList
+        data['Resistance (Ohms)'] = resistanceList
         
-        # Add new data to accumulated data with adjusted timestamps
-        self.accumulated_conductance_data['Minutes'].extend([(lastTime + t) / 60.0 for t in timeList])
-        self.accumulated_conductance_data['Temps (s)'].extend([lastTime + t for t in timeList])
-        self.accumulated_conductance_data['Conductance (µS)'].extend(conductanceList)
-        self.accumulated_conductance_data['Resistance (Ohms)'].extend(resistanceList)
+        # Pour les données accumulées (continuité entre les tests)
+        if sheet_name != "AutoSave":
+            # Calculer le dernier point temporel pour la continuité des données cumulées
+            lastTime = 0
+            if len(self.accumulated_conductance_data['Temps (s)']) > 0:
+                lastTime = self.accumulated_conductance_data['Temps (s)'][-1]
+            
+            # Ajouter les nouvelles données aux données accumulées
+            self.accumulated_conductance_data['Minutes'].extend([(lastTime + t) / 60.0 for t in timeList])
+            self.accumulated_conductance_data['Temps (s)'].extend([lastTime + t for t in timeList])
+            self.accumulated_conductance_data['Conductance (µS)'].extend(conductanceList)
+            self.accumulated_conductance_data['Resistance (Ohms)'].extend(resistanceList)
         
-        # Incrémenter le compteur à chaque sauvegarde (start button)
-        self.conductance_series_count += 1
+        # Sauvegarder ou mettre à jour la feuille
+        result = False
+        try:
+            # Vérifier si la feuille existe déjà pour l'ajouter ou la mettre à jour
+            wb = load_workbook(self.conductance_file)
+            if sheet_name in wb.sheetnames:
+                # La feuille existe, mettre à jour les données
+                ws = wb[sheet_name]
+                
+                # Déterminer la dernière ligne utilisée
+                last_row = ws.max_row
+                
+                # Ajouter les nouvelles données à partir de la dernière ligne
+                for i, (minute, second, conductance, resistance) in enumerate(zip(
+                    data['Minutes'], data['Temps (s)'], 
+                    data['Conductance (µS)'], data['Resistance (Ohms)'])):
+                    
+                    row = last_row + i + 1  # +1 car nous voulons ajouter après la dernière ligne
+                    
+                    ws.cell(row=row, column=1, value=minute)
+                    ws.cell(row=row, column=2, value=second)
+                    ws.cell(row=row, column=3, value=conductance)
+                    ws.cell(row=row, column=4, value=resistance)
+                
+                wb.save(self.conductance_file)
+                result = True
+            else:
+                # La feuille n'existe pas, utiliser la méthode existante pour la créer
+                result = self.add_sheet_to_excel(self.conductance_file, sheet_name, data)
+                
+                # Incrémenter le compteur à chaque nouvelle feuille (sauf AutoSave)
+                if sheet_name != "AutoSave":
+                    self.conductance_series_count += 1
+        except Exception as e:
+            print(f"Error saving conductance data: {e}")
+            result = self.add_sheet_to_excel(self.conductance_file, sheet_name, data)
         
-        # Create current test data sheet
-        data = {
-            'Minutes': [t / 60.0 for t in timeList],
-            'Temps (s)': timeList,
-            'Conductance (µS)': conductanceList,
-            'Resistance (Ohms)': resistanceList
-        }
-        
-        # Save current test data
-        return self.add_sheet_to_excel(self.conductance_file, sheet_name, data)
+        return result
     
     def save_co2_temp_humidity_data(self, co2_timestamps, co2_values, temp_timestamps, temp_values, humidity_timestamps, humidity_values, delta_c=None, carbon_mass=None, sheet_name=None):
         """
@@ -444,65 +540,171 @@ class ExcelHandler:
         # Use the first non-empty timestamp list
         timestamps = co2_timestamps if co2_timestamps else (temp_timestamps if temp_timestamps else humidity_timestamps)
         
-        # Calculate last time point for cumulative data continuation
-        lastTime = 0
-        if self.accumulated_co2_temp_humidity_data['Temps (s)']:
-            lastTime = self.accumulated_co2_temp_humidity_data['Temps (s)'][-1]
-        
-        # Add new data to accumulated data with adjusted timestamps
-        self.accumulated_co2_temp_humidity_data['Minutes'].extend([(lastTime + t) / 60.0 for t in timestamps])
-        self.accumulated_co2_temp_humidity_data['Temps (s)'].extend([lastTime + t for t in timestamps])
-        self.accumulated_co2_temp_humidity_data['CO2 (ppm)'].extend(co2_values)
-        self.accumulated_co2_temp_humidity_data['Température (°C)'].extend(temp_values)
-        self.accumulated_co2_temp_humidity_data['Humidité (%)'].extend(humidity_values)
-        
-        # Incrémenter le compteur à chaque sauvegarde (start button)
-        self.co2_temp_humidity_series_count += 1
-        
-        # Si aucun nom de feuille n'est fourni, en créer un avec l'horodatage
-        if sheet_name is None:
-            sheet_name = f"CO2_{datetime.now().strftime('%H%M%S')}"
-        
-        # Vérifier si cette feuille existe déjà
-        try:
-            wb = load_workbook(self.co2_temp_humidity_file)
-            if sheet_name in wb.sheetnames and sheet_name != "AutoSave":
-                # Génère un nom alternatif en ajoutant un suffixe (sauf pour AutoSave)
-                sheet_name = f"{sheet_name}_{self.co2_temp_humidity_series_count}"
-        except Exception as e:
-            print(f"Warning: Couldn't check for duplicate sheet names: {e}")
-        data = {
-            'Minutes': [t / 60.0 for t in timestamps],
-            'Temps (s)': timestamps,
-            'CO2 (ppm)': co2_values,
-            'Température (°C)': temp_values,
-            'Humidité (%)': humidity_values
-        }
-        
-        # Save current test data
-        result = self.add_sheet_to_excel(self.co2_temp_humidity_file, sheet_name, data)
-        
-        # Add deltaC and masseC cells if provided
-        if result and (delta_c is not None or carbon_mass is not None):
+        # Déterminer si on doit créer une nouvelle feuille ou utiliser l'existante
+        if sheet_name == "AutoSave":
+            # Pour les autosaves, toujours utiliser la feuille AutoSave
+            pass
+        elif not self.new_co2_temp_humidity_sheet_needed and self.active_co2_temp_humidity_sheet:
+            # Utiliser la feuille active si pas besoin de nouvelle feuille
+            sheet_name = self.active_co2_temp_humidity_sheet
+        else:
+            # Si aucun nom de feuille n'est fourni ou si une nouvelle est nécessaire, créer un nom
+            if sheet_name is None:
+                sheet_name = f"CO2_{datetime.now().strftime('%H%M%S')}"
+                
+            # Vérifier si cette feuille existe déjà
             try:
                 wb = load_workbook(self.co2_temp_humidity_file)
-                if sheet_name in wb.sheetnames:
-                    ws = wb[sheet_name]
-                    last_col = ws.max_column
-                    
-                    if delta_c is not None:
-                        ws.cell(row=1, column=last_col+1, value="deltaC (ppm)")
-                        ws.cell(row=2, column=last_col+1, value=delta_c)
-                    
-                    if carbon_mass is not None:
-                        ws.cell(row=1, column=last_col+2, value="masseC (µg)")
-                        ws.cell(row=2, column=last_col+2, value=carbon_mass)
-                    
-                    wb.save(self.co2_temp_humidity_file)
+                if sheet_name in wb.sheetnames and sheet_name != "AutoSave":
+                    # Génère un nom alternatif en ajoutant un suffixe (sauf pour AutoSave)
+                    sheet_name = f"{sheet_name}_{self.co2_temp_humidity_series_count}"
             except Exception as e:
-                print(f"Error adding deltaC and masseC cells: {e}")
+                print(f"Warning: Couldn't check for duplicate sheet names: {e}")
+                
+            # Mémoriser comme feuille active
+            self.active_co2_temp_humidity_sheet = sheet_name
+            self.new_co2_temp_humidity_sheet_needed = False
+        
+        # Définir les données à sauvegarder
+        data = {}
+        
+        # Pour les données de la feuille courante, vérifier s'il faut ajouter le décalage temporel
+        try:
+            if sheet_name != "AutoSave" and sheet_name in load_workbook(self.co2_temp_humidity_file).sheetnames:
+                # La feuille existe déjà, il faut maintenir la continuité temporelle
+                wb = load_workbook(self.co2_temp_humidity_file)
+                ws = wb[sheet_name]
+                
+                # Déterminer le dernier temps enregistré
+                last_row = ws.max_row
+                if last_row > 1:  # Si la feuille contient déjà des données
+                    last_time = ws.cell(row=last_row, column=2).value  # Colonne 2 = Temps (s)
+                    if last_time is not None:
+                        # Ajuster les timestamps pour continuer après le dernier point
+                        data['Minutes'] = [(last_time + t) / 60.0 for t in timestamps]
+                        data['Temps (s)'] = [last_time + t for t in timestamps]
+                    else:
+                        data['Minutes'] = [t / 60.0 for t in timestamps]
+                        data['Temps (s)'] = timestamps
+                else:
+                    data['Minutes'] = [t / 60.0 for t in timestamps]
+                    data['Temps (s)'] = timestamps
+            else:
+                # Nouvelle feuille ou AutoSave
+                data['Minutes'] = [t / 60.0 for t in timestamps]
+                data['Temps (s)'] = timestamps
+        except Exception as e:
+            print(f"Error checking for existing data: {e}")
+            data['Minutes'] = [t / 60.0 for t in timestamps]
+            data['Temps (s)'] = timestamps
+        
+        data['CO2 (ppm)'] = co2_values
+        data['Température (°C)'] = temp_values
+        data['Humidité (%)'] = humidity_values
+        
+        # Pour les données accumulées (continuité entre les tests)
+        if sheet_name != "AutoSave":
+            # Calculer le dernier point temporel pour la continuité des données cumulées
+            lastTime = 0
+            if len(self.accumulated_co2_temp_humidity_data['Temps (s)']) > 0:
+                lastTime = self.accumulated_co2_temp_humidity_data['Temps (s)'][-1]
+            
+            # Ajouter les nouvelles données aux données accumulées
+            self.accumulated_co2_temp_humidity_data['Minutes'].extend([(lastTime + t) / 60.0 for t in timestamps])
+            self.accumulated_co2_temp_humidity_data['Temps (s)'].extend([lastTime + t for t in timestamps])
+            self.accumulated_co2_temp_humidity_data['CO2 (ppm)'].extend(co2_values)
+            self.accumulated_co2_temp_humidity_data['Température (°C)'].extend(temp_values)
+            self.accumulated_co2_temp_humidity_data['Humidité (%)'].extend(humidity_values)
+        
+        # Sauvegarder ou mettre à jour la feuille
+        result = False
+        try:
+            # Vérifier si la feuille existe déjà pour l'ajouter ou la mettre à jour
+            wb = load_workbook(self.co2_temp_humidity_file)
+            if sheet_name in wb.sheetnames:
+                # La feuille existe, mettre à jour les données
+                ws = wb[sheet_name]
+                
+                # Déterminer la dernière ligne utilisée
+                last_row = ws.max_row
+                
+                # Ajouter les nouvelles données à partir de la dernière ligne
+                for i, (minute, second, co2, temp, humidity) in enumerate(zip(
+                    data['Minutes'], data['Temps (s)'], 
+                    data['CO2 (ppm)'], data['Température (°C)'], data['Humidité (%)'])):
+                    
+                    row = last_row + i + 1  # +1 car nous voulons ajouter après la dernière ligne
+                    
+                    ws.cell(row=row, column=1, value=minute)
+                    ws.cell(row=row, column=2, value=second)
+                    ws.cell(row=row, column=3, value=co2)
+                    ws.cell(row=row, column=4, value=temp)
+                    ws.cell(row=row, column=5, value=humidity)
+                
+                # Mettre à jour deltaC et masseC si fournis
+                if delta_c is not None:
+                    # Trouver la colonne de deltaC ou la créer
+                    col_delta = None
+                    for col in range(1, ws.max_column + 1):
+                        if ws.cell(row=1, column=col).value == "deltaC (ppm)":
+                            col_delta = col
+                            break
+                    
+                    if col_delta is None:
+                        col_delta = ws.max_column + 1
+                        ws.cell(row=1, column=col_delta, value="deltaC (ppm)")
+                    
+                    ws.cell(row=2, column=col_delta, value=delta_c)
+                
+                if carbon_mass is not None:
+                    # Trouver la colonne de masseC ou la créer
+                    col_mass = None
+                    for col in range(1, ws.max_column + 1):
+                        if ws.cell(row=1, column=col).value == "masseC (µg)":
+                            col_mass = col
+                            break
+                    
+                    if col_mass is None:
+                        col_mass = ws.max_column + 1
+                        ws.cell(row=1, column=col_mass, value="masseC (µg)")
+                    
+                    ws.cell(row=2, column=col_mass, value=carbon_mass)
+                
+                wb.save(self.co2_temp_humidity_file)
+                result = True
+            else:
+                # La feuille n'existe pas, utiliser la méthode existante pour la créer
+                result = self.add_sheet_to_excel(self.co2_temp_humidity_file, sheet_name, data)
+                
+                # Ajouter deltaC et masseC après création si fournis
+                if result and (delta_c is not None or carbon_mass is not None):
+                    try:
+                        wb = load_workbook(self.co2_temp_humidity_file)
+                        if sheet_name in wb.sheetnames:
+                            ws = wb[sheet_name]
+                            last_col = ws.max_column
+                            
+                            if delta_c is not None:
+                                ws.cell(row=1, column=last_col+1, value="deltaC (ppm)")
+                                ws.cell(row=2, column=last_col+1, value=delta_c)
+                            
+                            if carbon_mass is not None:
+                                ws.cell(row=1, column=last_col+2, value="masseC (µg)")
+                                ws.cell(row=2, column=last_col+2, value=carbon_mass)
+                            
+                            wb.save(self.co2_temp_humidity_file)
+                    except Exception as e:
+                        print(f"Error adding deltaC and masseC cells: {e}")
+                
+                # Incrémenter le compteur à chaque nouvelle feuille (sauf AutoSave)
+                if sheet_name != "AutoSave":
+                    self.co2_temp_humidity_series_count += 1
+        except Exception as e:
+            print(f"Error saving CO2/temp/humidity data: {e}")
+            result = self.add_sheet_to_excel(self.co2_temp_humidity_file, sheet_name, data)
         
         return result
+
     
     def save_temp_res_data(self, timestamps, temperatures, tcons_values, sheet_name=None):
         """
@@ -520,40 +722,118 @@ class ExcelHandler:
         if not timestamps or not (temperatures or tcons_values):
             return False
         
-        # Calculate last time point for cumulative data continuation
-        lastTime = 0
-        if self.accumulated_temp_res_data['Temps (s)']:
-            lastTime = self.accumulated_temp_res_data['Temps (s)'][-1]
+        # Déterminer si on doit créer une nouvelle feuille ou utiliser l'existante
+        if sheet_name == "AutoSave":
+            # Pour les autosaves, toujours utiliser la feuille AutoSave
+            pass
+        elif not self.new_temp_res_sheet_needed and self.active_temp_res_sheet:
+            # Utiliser la feuille active si pas besoin de nouvelle feuille
+            sheet_name = self.active_temp_res_sheet
+        else:
+            # Si aucun nom de feuille n'est fourni ou si une nouvelle est nécessaire, créer un nom
+            if sheet_name is None:
+                sheet_name = f"Temp_{datetime.now().strftime('%H%M%S')}"
+                
+            # Vérifier si cette feuille existe déjà
+            try:
+                wb = load_workbook(self.temp_res_file)
+                if sheet_name in wb.sheetnames and sheet_name != "AutoSave":
+                    # Génère un nom alternatif en ajoutant un suffixe (sauf pour AutoSave)
+                    sheet_name = f"{sheet_name}_{self.temp_res_series_count}"
+            except Exception as e:
+                print(f"Warning: Couldn't check for duplicate sheet names: {e}")
+                
+            # Mémoriser comme feuille active
+            self.active_temp_res_sheet = sheet_name
+            self.new_temp_res_sheet_needed = False
         
-        # Add new data to accumulated data with adjusted timestamps
-        self.accumulated_temp_res_data['Minutes'].extend([(lastTime + t) / 60.0 for t in timestamps])
-        self.accumulated_temp_res_data['Temps (s)'].extend([lastTime + t for t in timestamps])
-        self.accumulated_temp_res_data['Température mesurée'].extend(temperatures)
-        self.accumulated_temp_res_data['Tcons'].extend(tcons_values)
+        # Définir les données à sauvegarder
+        data = {}
         
-        # Incrémenter le compteur à chaque sauvegarde (start button)
-        self.temp_res_series_count += 1
-        
-        # Si aucun nom de feuille n'est fourni, en créer un avec l'horodatage
-        if sheet_name is None:
-            sheet_name = f"Temp_{datetime.now().strftime('%H%M%S')}"
-        
-        # Vérifier si cette feuille existe déjà
+        # Pour les données de la feuille courante, vérifier s'il faut ajouter le décalage temporel
         try:
-            wb = load_workbook(self.temp_res_file)
-            if sheet_name in wb.sheetnames and sheet_name != "AutoSave":
-                # Génère un nom alternatif en ajoutant un suffixe (sauf pour AutoSave)
-                sheet_name = f"{sheet_name}_{self.temp_res_series_count}"
+            if sheet_name != "AutoSave" and sheet_name in load_workbook(self.temp_res_file).sheetnames:
+                # La feuille existe déjà, il faut maintenir la continuité temporelle
+                wb = load_workbook(self.temp_res_file)
+                ws = wb[sheet_name]
+                
+                # Déterminer le dernier temps enregistré
+                last_row = ws.max_row
+                if last_row > 1:  # Si la feuille contient déjà des données
+                    last_time = ws.cell(row=last_row, column=2).value  # Colonne 2 = Temps (s)
+                    if last_time is not None:
+                        # Ajuster les timestamps pour continuer après le dernier point
+                        data['Minutes'] = [(last_time + t) / 60.0 for t in timestamps]
+                        data['Temps (s)'] = [last_time + t for t in timestamps]
+                    else:
+                        data['Minutes'] = [t / 60.0 for t in timestamps]
+                        data['Temps (s)'] = timestamps
+                else:
+                    data['Minutes'] = [t / 60.0 for t in timestamps]
+                    data['Temps (s)'] = timestamps
+            else:
+                # Nouvelle feuille ou AutoSave
+                data['Minutes'] = [t / 60.0 for t in timestamps]
+                data['Temps (s)'] = timestamps
         except Exception as e:
-            print(f"Warning: Couldn't check for duplicate sheet names: {e}")
-        data = {
-            'Minutes': [t / 60.0 for t in timestamps],
-            'Temps (s)': timestamps,
-            'Température mesurée': temperatures,
-            'Tcons': tcons_values
-        }
+            print(f"Error checking for existing data: {e}")
+            data['Minutes'] = [t / 60.0 for t in timestamps]
+            data['Temps (s)'] = timestamps
         
-        return self.add_sheet_to_excel(self.temp_res_file, sheet_name, data)
+        data['Température mesurée'] = temperatures
+        data['Tcons'] = tcons_values
+        
+        # Pour les données accumulées (continuité entre les tests)
+        if sheet_name != "AutoSave":
+            # Calculer le dernier point temporel pour la continuité des données cumulées
+            lastTime = 0
+            if len(self.accumulated_temp_res_data['Temps (s)']) > 0:
+                lastTime = self.accumulated_temp_res_data['Temps (s)'][-1]
+            
+            # Ajouter les nouvelles données aux données accumulées
+            self.accumulated_temp_res_data['Minutes'].extend([(lastTime + t) / 60.0 for t in timestamps])
+            self.accumulated_temp_res_data['Temps (s)'].extend([lastTime + t for t in timestamps])
+            self.accumulated_temp_res_data['Température mesurée'].extend(temperatures)
+            self.accumulated_temp_res_data['Tcons'].extend(tcons_values)
+        
+        # Sauvegarder ou mettre à jour la feuille
+        result = False
+        try:
+            # Vérifier si la feuille existe déjà pour l'ajouter ou la mettre à jour
+            wb = load_workbook(self.temp_res_file)
+            if sheet_name in wb.sheetnames:
+                # La feuille existe, mettre à jour les données
+                ws = wb[sheet_name]
+                
+                # Déterminer la dernière ligne utilisée
+                last_row = ws.max_row
+                
+                # Ajouter les nouvelles données à partir de la dernière ligne
+                for i, (minute, second, temp, tcons) in enumerate(zip(
+                    data['Minutes'], data['Temps (s)'], 
+                    data['Température mesurée'], data['Tcons'])):
+                    
+                    row = last_row + i + 1  # +1 car nous voulons ajouter après la dernière ligne
+                    
+                    ws.cell(row=row, column=1, value=minute)
+                    ws.cell(row=row, column=2, value=second)
+                    ws.cell(row=row, column=3, value=temp)
+                    ws.cell(row=row, column=4, value=tcons)
+                
+                wb.save(self.temp_res_file)
+                result = True
+            else:
+                # La feuille n'existe pas, utiliser la méthode existante pour la créer
+                result = self.add_sheet_to_excel(self.temp_res_file, sheet_name, data)
+                
+                # Incrémenter le compteur à chaque nouvelle feuille (sauf AutoSave)
+                if sheet_name != "AutoSave":
+                    self.temp_res_series_count += 1
+        except Exception as e:
+            print(f"Error saving temp/res data: {e}")
+            result = self.add_sheet_to_excel(self.temp_res_file, sheet_name, data)
+        
+        return result
     
     def save_all_data(self, measurement_manager):
         """
