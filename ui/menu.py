@@ -18,7 +18,9 @@ from core.constants import (
     REGENERATION_TEMP, TCONS_LOW, VALVE_DELAY, CONDUCTANCE_DECREASE_THRESHOLD,
     # Constantes de CO2
     CO2_STABILITY_THRESHOLD, CO2_STABILITY_DURATION, REGENERATION_DURATION,
-    CELL_VOLUME, CO2_INCREASE_THRESHOLD
+    CELL_VOLUME, CO2_INCREASE_THRESHOLD,
+    # Constantes Keithley
+    KEITHLEY_POLARIZATION_VOLTAGE
 )
 
 class MenuUI:
@@ -723,7 +725,8 @@ class ConstantsConfigWindow:
             ("DECREASE_SLOPE_THRESHOLD", "Seuil pente décroissance (µS/s)", DECREASE_SLOPE_THRESHOLD, "Seuil négatif pour détecter une diminution de conductance"),
             ("SLIDING_WINDOW", "Durée de la pente glissante (s)", SLIDING_WINDOW, "Durée de l'intervalle pour le calcul de la pente glissante"),
             ("R0_THRESHOLD", "Seuil R0 (Ohms)", R0_THRESHOLD, "Seuil de résistance R0 en Ohms pour le calcul de conductance"),
-            ("CONDUCTANCE_DECREASE_THRESHOLD", "Seuil décroissance (µS)", CONDUCTANCE_DECREASE_THRESHOLD, "Seuil de décroissance de conductance en µS")
+            ("CONDUCTANCE_DECREASE_THRESHOLD", "Seuil décroissance (µS)", CONDUCTANCE_DECREASE_THRESHOLD, "Seuil de décroissance de conductance en µS"),
+            ("KEITHLEY_POLARIZATION_VOLTAGE", "Tension de polarisation (V)", KEITHLEY_POLARIZATION_VOLTAGE, "Tension de polarisation en Volts pour les mesures de conductance")
         ]
 
         for i, (const_name, label_text, current_value, tooltip) in enumerate(conductance_params):
@@ -835,6 +838,9 @@ class ConstantsConfigWindow:
 
         self.entries["CONDUCTANCE_DECREASE_THRESHOLD"].delete(0, tk.END)
         self.entries["CONDUCTANCE_DECREASE_THRESHOLD"].insert(0, str(CONDUCTANCE_DECREASE_THRESHOLD))
+        
+        self.entries["KEITHLEY_POLARIZATION_VOLTAGE"].delete(0, tk.END)
+        self.entries["KEITHLEY_POLARIZATION_VOLTAGE"].insert(0, str(KEITHLEY_POLARIZATION_VOLTAGE))
 
         # Réinitialiser les valeurs de température
         self.entries["REGENERATION_TEMP"].delete(0, tk.END)
@@ -863,14 +869,14 @@ class ConstantsConfigWindow:
         self.entries["CO2_INCREASE_THRESHOLD"].insert(0, str(CO2_INCREASE_THRESHOLD))
 
     def save_values(self):
-        """Sauvegarde les valeurs modifiées pour la session en cours"""
+        """Sauvegarde les valeurs modifiées pour la session en cours et dans les fichiers appropriés"""
         try:
             # Créer un dictionnaire avec les nouvelles valeurs
             # Important: Convertir les valeurs dans le bon type (float, int)
             new_values = {}
 
             # Vérifier et récupérer les valeurs des constantes de conductance
-            for key in ["STABILITY_DURATION", "SLIDING_WINDOW", "R0_THRESHOLD", "CONDUCTANCE_DECREASE_THRESHOLD"]:
+            for key in ["STABILITY_DURATION", "SLIDING_WINDOW", "R0_THRESHOLD", "CONDUCTANCE_DECREASE_THRESHOLD", "KEITHLEY_POLARIZATION_VOLTAGE"]:
                 try:
                     # Ces constantes sont des entiers ou des nombres à virgule
                     value = self.entries[key].get().strip()
@@ -936,9 +942,58 @@ class ConstantsConfigWindow:
             import core.constants
             for key, value in new_values.items():
                 setattr(core.constants, key, value)
-
+            
+            # Vérifier si nous sommes en mode exécutable
+            from utils.config_manager import is_running_as_executable, save_config
+            
+            success_message = "Les paramètres ont été appliqués pour cette session"
+            if is_running_as_executable():
+                # En mode exécutable, sauvegarder dans fichier JSON
+                if save_config(new_values):
+                    success_message += " et sauvegardés dans le fichier de configuration"
+                else:
+                    messagebox.showwarning("Avertissement",
+                       "Les paramètres ont été appliqués pour cette session mais n'ont pas pu être sauvegardés dans le fichier de configuration")
+            else:
+                # En mode script, sauvegarder dans le fichier constants.py
+                try:
+                    # Chemin du module constants.py
+                    import os
+                    import inspect
+                    constants_file_path = inspect.getfile(core.constants)
+                    
+                    # Lire le contenu actuel du fichier
+                    with open(constants_file_path, 'r', encoding='utf-8') as f:
+                        file_content = f.read()
+                    
+                    # Mettre à jour chaque constante dans le fichier
+                    for key, value in new_values.items():
+                        # Créer un pattern de recherche pour la constante
+                        import re
+                        if isinstance(value, int) or isinstance(value, float):
+                            # Remplacer la valeur numérique
+                            pattern = rf"^{key}\s*=\s*[0-9*\.\s]+.*$"
+                            # Conserver les commentaires éventuels après la valeur
+                            comment_match = re.search(rf"^{key}\s*=\s*[0-9*\.\s]+(.*)$", file_content, re.MULTILINE)
+                            comment = comment_match.group(1) if comment_match else ""
+                            replacement = f"{key} = {value}{comment}"
+                            file_content = re.sub(pattern, replacement, file_content, flags=re.MULTILINE)
+                    
+                    # Écrire le contenu mis à jour dans le fichier
+                    with open(constants_file_path, 'w', encoding='utf-8') as f:
+                        f.write(file_content)
+                        
+                    success_message += " et sauvegardés dans le fichier constants.py"
+                    
+                except Exception as file_error:
+                    # En cas d'erreur lors de l'écriture du fichier, informer l'utilisateur mais continuer
+                    messagebox.showwarning("Avertissement", 
+                        f"Les paramètres ont été appliqués pour cette session mais n'ont pas pu être sauvegardés de façon permanente:\n{str(file_error)}")
+            
+            # Afficher un message de succès
+            messagebox.showinfo("Succès", success_message)
+            
             # Fermer la fenêtre
-            messagebox.showinfo("Succès", "Les paramètres ont été appliqués pour cette session")
             self.window.destroy()
 
         except Exception as e:

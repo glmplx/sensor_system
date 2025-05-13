@@ -12,7 +12,8 @@ from core.constants import (
     KEITHLEY_GPIB_ADDRESS,
     KEITHLEY_READ_TIMEOUT,
     KEITHLEY_OPERATION_TIMEOUT,
-    KEITHLEY_VISA_ERROR_CLOSING_FAILED
+    KEITHLEY_VISA_ERROR_CLOSING_FAILED,
+    KEITHLEY_POLARIZATION_VOLTAGE
 )
 
 class KeithleyDevice:
@@ -47,9 +48,13 @@ class KeithleyDevice:
         self._original_excepthook = sys.excepthook
         sys.excepthook = lambda etype, evalue, etb: self._custom_excepthook(etype, evalue, etb)
     
-    def connect(self):
+    def connect(self, polarization_voltage=None):
         """
         Établit la connexion à l'appareil Keithley via GPIB
+        
+        Args:
+            polarization_voltage: Tension de polarisation en Volts à utiliser.
+                                  Si None, utilise la valeur par défaut définie dans les constantes.
         
         Returns:
             bool: True si la connexion a réussi, False sinon
@@ -57,20 +62,27 @@ class KeithleyDevice:
         try:
             rm = pyvisa.ResourceManager()
             self.device = rm.open_resource(self.gpib_address)
-            self.configure()
+            self.configure(polarization_voltage)
             return True
         except Exception as e:
             print(f"Erreur de connexion à l'appareil Keithley: {e}")
             return False
     
-    def configure(self):
+    def configure(self, polarization_voltage=None):
         """
         Configure l'appareil Keithley avec les paramètres nécessaires pour les mesures de résistance
+        
+        Args:
+            polarization_voltage: Tension de polarisation en Volts à utiliser. 
+                                  Si None, utilise la valeur par défaut définie dans les constantes.
         
         Returns:
             bool: True si la configuration a réussi, False sinon
         """
         try:
+            # Utiliser la tension spécifiée ou la valeur par défaut
+            voltage = polarization_voltage if polarization_voltage is not None else KEITHLEY_POLARIZATION_VOLTAGE
+            
             # Désactiver la vérification zéro
             self.device.write(KEITHLEY_COMMANDS["ZERO_CHECK_OFF"])
             
@@ -83,7 +95,7 @@ class KeithleyDevice:
             
             # Définir la plage et le niveau de tension
             self.device.write(KEITHLEY_COMMANDS["VOLTAGE_RANGE"])
-            self.device.write(KEITHLEY_COMMANDS["VOLTAGE_LEVEL"])
+            self.device.write(KEITHLEY_COMMANDS["VOLTAGE_LEVEL"].format(voltage))
             
             # Activer la sortie
             self.device.write(KEITHLEY_COMMANDS["OUTPUT_ON"])

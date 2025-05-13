@@ -21,6 +21,18 @@ def create_executable():
     # Define paths
     main_script = os.path.join(current_dir, 'main.py')
     
+    # Create a default configuration file if it doesn't exist
+    from utils.config_manager import get_constants_as_dict, save_config
+    config_data = get_constants_as_dict()
+    config_path = os.path.join(current_dir, 'sensor_config.json')
+    
+    # Si le fichier de configuration existe déjà, ne pas l'écraser
+    if not os.path.exists(config_path):
+        print(f"Creating default configuration file at {config_path}")
+        with open(config_path, 'w', encoding='utf-8') as f:
+            import json
+            json.dump(config_data, f, indent=2, ensure_ascii=False)
+    
     # Create a temporary file for the spec file
     with tempfile.NamedTemporaryFile(suffix='.spec', delete=False) as temp_file:
         spec_file = temp_file.name
@@ -28,6 +40,7 @@ def create_executable():
     # Normalize paths for the spec file
     main_script_norm = main_script.replace("\\", "/")
     current_dir_norm = current_dir.replace("\\", "/")
+    config_path_norm = config_path.replace("\\", "/")
     
     # Write the spec file content using a simpler approach with string concatenation
     spec_content = """# -*- mode: python ; coding: utf-8 -*-
@@ -39,6 +52,8 @@ a = Analysis(
     pathex=['""" + current_dir_norm + """'],
     binaries=[],
     datas=[
+        # Inclure le fichier de configuration
+        ('""" + config_path_norm + """', '.'),
 """
     
     # Add data files if they exist

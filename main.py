@@ -15,6 +15,10 @@ def main():
     Initialise l'interface utilisateur et gère les exceptions globales.
     """
     try:
+        # Charger la configuration externe si en mode exécutable
+        from utils.config_manager import update_constants_from_config
+        update_constants_from_config()
+        
         # Importer ici pour capturer les erreurs d'importation
         from ui.menu import MenuUI
         menu = MenuUI()
