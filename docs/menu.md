@@ -7,13 +7,22 @@
 - [`scan_ports(self)`](#scan_ports)
 - [`refresh_ports(self, show_message=True)`](#refresh_ports)
 - [`setup_ui(self)`](#setup_ui)
+- [`toggle_location_selector(*args)`](#toggle_location_selector)
+- [`browse_directory()`](#browse_directory)
 - [`set_manual_mode(self)`](#set_manual_mode)
 - [`set_auto_mode(self)`](#set_auto_mode)
 - [`check_port_selections(self, arduino_port_str, other_port_str)`](#check_port_selections)
 - [`launch_program(self)`](#launch_program)
 - [`open_documentation(self)`](#open_documentation)
+- [`run_mkdocs_server()`](#run_mkdocs_server)
+- [`open_browser()`](#open_browser)
+- [`open_config_window(self)`](#open_config_window)
 - [`quit_application(self)`](#quit_application)
 - [`run(self)`](#run)
+- [`__init__(self, parent)`](#__init__)
+- [`setup_ui(self)`](#setup_ui)
+- [`reset_values(self)`](#reset_values)
+- [`save_values(self)`](#save_values)
 
 ---
 
@@ -64,6 +73,26 @@ def setup_ui(self)
 ```
 
 Configurer les éléments de l'interface utilisateur
+
+---
+
+## `toggle_location_selector(*args)` { #toggle_location_selector }
+
+```python
+def toggle_location_selector(*args)
+```
+
+Pas de docstring
+
+---
+
+## `browse_directory()` { #browse_directory }
+
+```python
+def browse_directory()
+```
+
+Pas de docstring
 
 ---
 
@@ -119,7 +148,37 @@ Lancer le mode de programme sélectionné
 def open_documentation(self)
 ```
 
-Ouvre le fichier de documentation
+Lance mkdocs serve et ouvre la documentation dans un navigateur, adapté pour fonctionnement hors-ligne
+
+---
+
+## `run_mkdocs_server()` { #run_mkdocs_server }
+
+```python
+def run_mkdocs_server()
+```
+
+Pas de docstring
+
+---
+
+## `open_browser()` { #open_browser }
+
+```python
+def open_browser()
+```
+
+Pas de docstring
+
+---
+
+## `open_config_window(self)` { #open_config_window }
+
+```python
+def open_config_window(self)
+```
+
+Ouvre la fenêtre de configuration des constantes
 
 ---
 
@@ -140,6 +199,48 @@ def run(self)
 ```
 
 Exécuter la boucle principale de l'interface utilisateur
+
+---
+
+## `__init__(self, parent)` { #__init__ }
+
+```python
+def __init__(self, parent)
+```
+
+Initialise la fenêtre de configuration des constantes
+Args:
+parent: Fenêtre parente (MenuUI) qui a créé cette fenêtre
+
+---
+
+## `setup_ui(self)` { #setup_ui }
+
+```python
+def setup_ui(self)
+```
+
+Configurer l'interface utilisateur
+
+---
+
+## `reset_values(self)` { #reset_values }
+
+```python
+def reset_values(self)
+```
+
+Réinitialise les champs aux valeurs par défaut
+
+---
+
+## `save_values(self)` { #save_values }
+
+```python
+def save_values(self)
+```
+
+Sauvegarde les valeurs modifiées pour la session en cours et dans les fichiers appropriés
 
 ---
 

@@ -4,7 +4,8 @@
 
 ## Fonctions
 - [`main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_rate=None,
-         measure_conductance=1, measure_co2=1, measure_regen=1)`](#main)
+         measure_conductance=1, measure_co2=1, measure_regen=1, auto_save=True, save_data=True,
+         custom_save_location=False, save_location=None)`](#main)
 - [`handle_window_close(event=None)`](#handle_window_close)
 - [`toggle_conductance(event)`](#toggle_conductance)
 - [`toggle_co2_temp_humidity(event)`](#toggle_co2_temp_humidity)
@@ -36,11 +37,13 @@
 ---
 
 ## `main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_rate=None,
-         measure_conductance=1, measure_co2=1, measure_regen=1)` { #main }
+         measure_conductance=1, measure_co2=1, measure_regen=1, auto_save=True, save_data=True,
+         custom_save_location=False, save_location=None)` { #main }
 
 ```python
 def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_rate=None,
-         measure_conductance=1, measure_co2=1, measure_regen=1)
+         measure_conductance=1, measure_co2=1, measure_regen=1, auto_save=True, save_data=True,
+         custom_save_location=False, save_location=None)
 ```
 
 Point d'entrée principal pour l'application en mode manuel

@@ -3,7 +3,7 @@
 *Fichier source : `regen_device.py`*
 
 ## Fonctions
-- [`__init__(self, port=None, baud_rate=115200, timeout=2)`](#__init__)
+- [`__init__(self, port=None, baud_rate=REGEN_DEFAULT_BAUD_RATE, timeout=REGEN_DEFAULT_TIMEOUT)`](#__init__)
 - [`connect(self)`](#connect)
 - [`read_variable(self, command, address)`](#read_variable)
 - [`write_parameter(self, command, address, value)`](#write_parameter)
@@ -11,10 +11,10 @@
 
 ---
 
-## `__init__(self, port=None, baud_rate=115200, timeout=2)` { #__init__ }
+## `__init__(self, port=None, baud_rate=REGEN_DEFAULT_BAUD_RATE, timeout=REGEN_DEFAULT_TIMEOUT)` { #__init__ }
 
 ```python
-def __init__(self, port=None, baud_rate=115200, timeout=2)
+def __init__(self, port=None, baud_rate=REGEN_DEFAULT_BAUD_RATE, timeout=REGEN_DEFAULT_TIMEOUT)
 ```
 
 Initialise l'appareil de régénération

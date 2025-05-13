@@ -5,8 +5,8 @@
 ## Fonctions
 - [`_custom_excepthook(self, etype, evalue, etraceback)`](#_custom_excepthook)
 - [`__init__(self, gpib_address=KEITHLEY_GPIB_ADDRESS)`](#__init__)
-- [`connect(self)`](#connect)
-- [`configure(self)`](#configure)
+- [`connect(self, polarization_voltage=None)`](#connect)
+- [`configure(self, polarization_voltage=None)`](#configure)
 - [`read_resistance(self)`](#read_resistance)
 - [`_async_delay(self, seconds)`](#_async_delay)
 - [`turn_output_on(self)`](#turn_output_on)
@@ -38,25 +38,31 @@ gpib_address: Adresse GPIB de l'appareil
 
 ---
 
-## `connect(self)` { #connect }
+## `connect(self, polarization_voltage=None)` { #connect }
 
 ```python
-def connect(self)
+def connect(self, polarization_voltage=None)
 ```
 
 Établit la connexion à l'appareil Keithley via GPIB
+Args:
+polarization_voltage: Tension de polarisation en Volts à utiliser.
+Si None, utilise la valeur par défaut définie dans les constantes.
 Returns:
 bool: True si la connexion a réussi, False sinon
 
 ---
 
-## `configure(self)` { #configure }
+## `configure(self, polarization_voltage=None)` { #configure }
 
 ```python
-def configure(self)
+def configure(self, polarization_voltage=None)
 ```
 
 Configure l'appareil Keithley avec les paramètres nécessaires pour les mesures de résistance
+Args:
+polarization_voltage: Tension de polarisation en Volts à utiliser. 
+Si None, utilise la valeur par défaut définie dans les constantes.
 Returns:
 bool: True si la configuration a réussi, False sinon
 

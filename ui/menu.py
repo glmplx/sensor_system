@@ -557,12 +557,11 @@ class MenuUI:
         if not os.path.exists(mkdocs_path):
             tk.messagebox.showerror("Erreur", "Fichier mkdocs.yml non trouvé. Veuillez exécuter mkdocs_script.py d'abord.")
             return
-
-        # Essayer de lancer mkdocs serve
+        
+        # Lancer mkdocs serve et ouvrir dans le navigateur
         try:
             import threading
             import webbrowser
-            import time
 
             # Variable pour communiquer entre les threads
             server_ready = threading.Event()
@@ -580,17 +579,13 @@ class MenuUI:
                         shell=sys.platform.startswith('win')
                     )
 
-                    print("Serveur MkDocs en cours de démarrage...")
-
                     # Lire la sortie pour les messages d'erreur ou le port
                     for line in process.stdout:
-                        print(line.strip())
                         # Si la ligne contient "Documentation built" ou "Serving on", le serveur est prêt
                         if "Documentation built" in line or "Serving on" in line:
                             server_ready.set()
                             break
-                except Exception as e:
-                    print(f"Erreur lors du lancement de mkdocs serve: {e}")
+                except Exception:
                     server_ready.set()  # Signaler même en cas d'erreur pour ne pas bloquer le thread principal
 
             # Lancer le serveur dans un thread séparé
@@ -598,29 +593,24 @@ class MenuUI:
             server_thread.start()
 
             # Attendre jusqu'à 5 secondes maximum pour que le serveur soit prêt
-            is_ready = server_ready.wait(timeout=1.0)
-            if not is_ready:
-                print("Avertissement: Serveur MkDocs n'a pas encore signalé sa disponibilité. Poursuite quand même...")
+            server_ready.wait(timeout=3.0)
 
             # Ouvrir l'URL dans le navigateur
             def open_browser():
                 url = "http://127.0.0.1:8000/"  # URL par défaut pour mkdocs serve
                 webbrowser.open(url)
-                print(f"Documentation ouverte dans le navigateur: {url}")
 
             # Exécuter l'action dans le thread principal
-            self.window.after(100, open_browser)
+            self.window.after(500, open_browser)  # Attendre un peu plus longtemps avant d'ouvrir le navigateur
 
             tk.messagebox.showinfo(
                 "Documentation",
-                "Le serveur MkDocs a été démarré sur le port 8000.\n"
                 "La documentation a été ouverte dans votre navigateur.\n\n"
                 "Note: Le serveur s'arrêtera automatiquement à la fermeture de l'application."
             )
 
-        except Exception as e:
+        except Exception:
             # Si mkdocs ne fonctionne pas, essayer d'ouvrir le fichier directement
-            print(f"Erreur avec mkdocs serve: {e}")
             doc_path = os.path.join(base_dir, "docs", "index.md")
 
             try:
@@ -632,20 +622,19 @@ class MenuUI:
                 else:  # linux
                     subprocess.call(['xdg-open', doc_path])
 
-                # Plus besoin d'ouvrir Google dans un autre onglet
-
                 tk.messagebox.showinfo(
                     "Documentation",
-                    "La commande mkdocs serve a échoué.\nLes fichiers de documentation ont été ouverts directement.\n"
+                    "Les fichiers de documentation ont été ouverts directement.\n"
                     "Pour une meilleure expérience, installez MkDocs: pip install mkdocs mkdocs-material"
                 )
-            except Exception as e2:
+            except Exception:
                 tk.messagebox.showerror(
                     "Erreur",
-                    f"Impossible d'ouvrir la documentation: {str(e)}\n{str(e2)}\n\n"
-                    f"Vous pouvez lancer manuellement: mkdocs serve\n"
-                    f"Puis ouvrir http://127.0.0.1:8000/ dans votre navigateur."
+                    "Impossible d'ouvrir la documentation.\n\n"
+                    "Vous pouvez lancer manuellement: mkdocs serve\n"
+                    "Puis ouvrir http://127.0.0.1:8000/ dans votre navigateur."
                 )
+
 
     def open_config_window(self):
         """Ouvre la fenêtre de configuration des constantes"""

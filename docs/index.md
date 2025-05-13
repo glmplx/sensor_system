@@ -1,13 +1,12 @@
 # Documentation du projet
 
-*Générée automatiquement le 12/05/2025 à 17:49*
+*Générée automatiquement le 13/05/2025 à 15:21*
 
 ## Modules disponibles
 - [arduino_device](arduino_device.md)
 - [auto_app](auto_app.md)
 - [create_executable](create_executable.md)
 - [create_installer](create_installer.md)
-- [doc_maker](doc_maker.md)
 - [excel_handler](excel_handler.md)
 - [helpers](helpers.md)
 - [keithley_device](keithley_device.md)

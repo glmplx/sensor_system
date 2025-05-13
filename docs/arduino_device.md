@@ -3,7 +3,7 @@
 *Fichier source : `arduino_device.py`*
 
 ## Fonctions
-- [`__init__(self, port=None, baud_rate=115200, timeout=2)`](#__init__)
+- [`__init__(self, port=None, baud_rate=ARDUINO_DEFAULT_BAUD_RATE, timeout=ARDUINO_DEFAULT_TIMEOUT)`](#__init__)
 - [`connect(self)`](#connect)
 - [`read_line(self)`](#read_line)
 - [`send_command(self, command)`](#send_command)
@@ -11,10 +11,10 @@
 
 ---
 
-## `__init__(self, port=None, baud_rate=115200, timeout=2)` { #__init__ }
+## `__init__(self, port=None, baud_rate=ARDUINO_DEFAULT_BAUD_RATE, timeout=ARDUINO_DEFAULT_TIMEOUT)` { #__init__ }
 
 ```python
-def __init__(self, port=None, baud_rate=115200, timeout=2)
+def __init__(self, port=None, baud_rate=ARDUINO_DEFAULT_BAUD_RATE, timeout=ARDUINO_DEFAULT_TIMEOUT)
 ```
 
 Initialise l'appareil Arduino

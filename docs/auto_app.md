@@ -3,7 +3,8 @@
 *Fichier source : `auto_app.py`*
 
 ## Fonctions
-- [`main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_rate=None)`](#main)
+- [`main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_rate=None,
+         auto_save=True, save_data=True, custom_save_location=False, save_location=None)`](#main)
 - [`handle_window_close(event=None)`](#handle_window_close)
 - [`toggle_auto(event)`](#toggle_auto)
 - [`raz_auto(event)`](#raz_auto)
@@ -19,10 +20,12 @@
 
 ---
 
-## `main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_rate=None)` { #main }
+## `main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_rate=None,
+         auto_save=True, save_data=True, custom_save_location=False, save_location=None)` { #main }
 
 ```python
-def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_rate=None)
+def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_rate=None,
+         auto_save=True, save_data=True, custom_save_location=False, save_location=None)
 ```
 
 Point d'entrée principal pour l'application en mode automatique

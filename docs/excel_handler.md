@@ -3,7 +3,7 @@
 *Fichier source : `excel_handler.py`*
 
 ## Fonctions
-- [`__init__(self, mode="manual")`](#__init__)
+- [`__init__(self, mode="manual", base_dir=None)`](#__init__)
 - [`initialize_folder(self)`](#initialize_folder)
 - [`initialize_file(self, file_type)`](#initialize_file)
 - [`_create_workbook_with_info(self, file_path, file_type)`](#_create_workbook_with_info)
@@ -25,15 +25,16 @@
 
 ---
 
-## `__init__(self, mode="manual")` { #__init__ }
+## `__init__(self, mode="manual", base_dir=None)` { #__init__ }
 
 ```python
-def __init__(self, mode="manual")
+def __init__(self, mode="manual", base_dir=None)
 ```
 
 Initialiser le gestionnaire Excel
 Args:
 mode: Mode de fonctionnement, soit "manual" soit "auto"
+base_dir: Répertoire de base pour les fichiers Excel (par défaut: EXCEL_BASE_DIR)
 
 ---
 
