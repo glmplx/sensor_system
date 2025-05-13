@@ -9,8 +9,6 @@ automatisée de conductance avec régénération automatique du capteur.
 import sys
 import time
 import os
-import signal
-import threading
 import matplotlib.pyplot as plt
 
 from devices.keithley_device import KeithleyDevice
@@ -257,23 +255,37 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         plot_manager.update_detection_indicators(False, False)
     
     def set_R0(event):
+        """
+        Met à jour la valeur de R0 dans le système
+        """
         value = plot_manager.textboxes['R0'].text
         measurements.set_R0(value)
     
     def update_read_R0(event):
+        """
+        Lit la valeur de R0 depuis le capteur et met à jour l'affichage
+        """
         R0 = measurements.read_R0()
         if R0 is not None:
             plot_manager.update_R0_display(R0)
     
     def push_open(event):
+        """
+        Gère le clic sur le bouton d'ouverture du vérin
+        """
         measurements.push_open_sensor()
         # Les voyants seront mis à jour par la lecture des pins
     
     def retract_close(event):
+        """
+        Gère le clic sur le bouton de fermeture du vérin"""
         measurements.retract_close_sensor()
         # Les voyants seront mis à jour par la lecture des pins
         
     def init_system(event):
+        """
+        Gère le clic sur le bouton d'initialisation du système
+        """
         measurements.init_system()
         # La couleur est maintenue automatiquement par le connect_button modifié
     

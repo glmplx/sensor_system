@@ -10,7 +10,16 @@ import shutil
 import tempfile
 
 def create_executable():
-    """Create an executable for the sensor system application"""
+    """
+    Create an executable for the sensor system application
+    
+    This function generates a PyInstaller executable package for the sensor system.
+    It creates a spec file, copies necessary data files, and packages everything 
+    into a standalone executable that can run without Python installed.
+    
+    Returns:
+        bool: True if the executable was created successfully, False otherwise
+    """
     
     # Get the current directory (where this script is located)
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -35,6 +44,10 @@ def create_executable():
     
     # Create a temporary file for the spec file
     with tempfile.NamedTemporaryFile(suffix='.spec', delete=False) as temp_file:
+        """
+        Create a temporary file for the PyInstaller spec file.
+        We use NamedTemporaryFile to get a unique filename that won't conflict with existing files.
+        """
         spec_file = temp_file.name
     
     # Normalize paths for the spec file

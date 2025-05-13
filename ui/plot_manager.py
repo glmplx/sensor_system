@@ -77,6 +77,7 @@ class PlotManager:
                         
                         # Ensuite la centrer après un court délai
                         def center_window():
+                            """Centre la fenêtre sur l'écran"""
                             screen_width = root.winfo_screenwidth()
                             screen_height = root.winfo_screenheight()
                             pos_x = (screen_width // 2) - (width // 2)
@@ -537,6 +538,7 @@ class PlotManager:
             if button_name in ['push_open', 'retract_close', 'co2_temp_humidity', 'res_temp', 'set_Tcons', 'protocole_complet', 'regeneration', 'conductance_regen']:
 
                 def wrapped_disabled_callback(event):
+                    """ Fonction de rappel qui gère les boutons désactivés """
                     # Ne rien faire si le bouton est désactivé
                     if hasattr(self.buttons[button_name], 'active') and not self.buttons[button_name].active:
                         return
@@ -555,6 +557,7 @@ class PlotManager:
                 original_color = self.buttons[button_name].ax.get_facecolor()
 
                 def wrapped_init_callback(event):
+                    """ Fonction de rappel qui gère le bouton init """
                     # Appeler le callback original
                     callback(event)
 
@@ -1511,6 +1514,9 @@ class PlotManager:
                         original_close_event = window.closeEvent
                         
                         def new_close_event(event):
+                            """
+                            La fonction def new_close_event(event): sert à intercepter l'événement de fermeture de la fenêtre
+                            """
                             # Run our callback first
                             if callback:
                                 callback(event)
@@ -1533,6 +1539,9 @@ class PlotManager:
                         
                         # Bind to EVT_CLOSE
                         def on_close(event):
+                            """
+                            Fonction de gestion d’événement utilisée uniquement pour le backend wxPython
+                            """
                             callback(event)
                             event.Skip()
                             

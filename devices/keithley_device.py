@@ -1,10 +1,8 @@
 """
 Interface pour l'appareil Keithley 6517.
 Gère la communication, la configuration et les mesures de résistance via l'instrument GPIB.
-Auteur: Guillaume Pailloux
 """
 
-import time
 import pyvisa
 import sys
 from core.constants import (

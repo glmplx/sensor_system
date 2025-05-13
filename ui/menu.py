@@ -8,8 +8,6 @@ import subprocess
 import serial.tools.list_ports
 import os
 import sys
-import importlib
-import inspect
 from core.constants import (
     EXCEL_BASE_DIR,
     # Constantes de conductance
@@ -253,6 +251,7 @@ class MenuUI:
 
         # Fonction pour afficher/masquer le sélecteur d'emplacement
         def toggle_location_selector(*args):
+            """Afficher ou masquer le champ de saisie de l'emplacement de sauvegarde"""
             if self.custom_save_location_var.get():
                 location_entry.grid(row=3, column=0, columnspan=1, sticky='ew', padx=10, pady=2)
                 browse_button.grid(row=3, column=1, sticky='w', padx=0, pady=2)
@@ -262,6 +261,7 @@ class MenuUI:
 
         # Fonction pour ouvrir le sélecteur de dossier
         def browse_directory():
+            """Ouvrir le sélecteur de dossier pour choisir l'emplacement de sauvegarde"""
             directory = filedialog.askdirectory(initialdir=self.save_location_path.get())
             if directory:  # Si l'utilisateur a sélectionné un dossier
                 self.save_location_path.set(directory)
@@ -568,6 +568,7 @@ class MenuUI:
 
             # Fonction pour lancer mkdocs serve dans un thread séparé
             def run_mkdocs_server():
+                """Lancer le serveur mkdocs dans un thread séparé"""
                 os.chdir(base_dir)  # Changer le répertoire de travail
                 try:
                     # Lancer mkdocs serve
@@ -597,6 +598,7 @@ class MenuUI:
 
             # Ouvrir l'URL dans le navigateur
             def open_browser():
+                """Ouvrir le navigateur à l'URL de la documentation"""
                 url = "http://127.0.0.1:8000/"  # URL par défaut pour mkdocs serve
                 webbrowser.open(url)
 

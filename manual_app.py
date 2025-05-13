@@ -291,6 +291,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
     
     # Function to handle window X button close event
     def handle_window_close(event=None):
+        """Gère la fermeture de la fenêtre"""
         nonlocal escape_pressed
         if not escape_pressed:  # Éviter une double fermeture
             # Call the same quit function used by the quit button
@@ -342,6 +343,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
     
     # Define event handlers
     def toggle_conductance(event):
+        """Gère l'activation/desactivation des données de conductance"""
         nonlocal measure_conductance_active, conductance_file_initialized
         previous_state = measure_conductance_active
         measure_conductance_active = not measure_conductance_active
@@ -377,6 +379,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         )
 
     def toggle_co2_temp_humidity(event):
+        """Gère l'activation/desactivation des données CO2/température/humidité"""
         nonlocal measure_co2_temp_humidity_active, co2_temp_humidity_file_initialized
         previous_state = measure_co2_temp_humidity_active
         measure_co2_temp_humidity_active = not measure_co2_temp_humidity_active
@@ -417,6 +420,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         )
 
     def toggle_res_temp(event):
+        """Gère l'activation/desactivation des données de température et de résistance"""
         nonlocal measure_res_temp_active, temp_res_file_initialized
         previous_state = measure_res_temp_active
         measure_res_temp_active = not measure_res_temp_active
@@ -452,6 +456,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         )
     
     def raz_conductance(event):
+        """Gère la réinitialisation des données de conductance"""
         # Sauvegarder les données courantes avant RAZ
         if measurements.timeList and len(measurements.timeList) > 0:
             data_handler.save_conductance_data(
@@ -485,6 +490,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
             ax_percolation_time.figure.canvas.draw_idle()
 
     def raz_co2_temp_humidity(event):
+        """Gère la réinitialisation des données CO2/température/humidité"""
         # Sauvegarder les données courantes avant RAZ
         if (measurements.timestamps_co2 and len(measurements.timestamps_co2) > 0) or \
         (measurements.timestamps_temp and len(measurements.timestamps_temp) > 0) or \
@@ -516,6 +522,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         plot_manager.update_co2_temp_humidity_plot([], [], [], [], [], [])
 
     def raz_res_temp(event):
+        """Gère la réinitialisation des données de température et de résistance"""
         # Sauvegarder les données courantes avant RAZ
         if measurements.timestamps_res_temp and len(measurements.timestamps_res_temp) > 0:
             data_handler.save_temp_res_data(
@@ -537,10 +544,12 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         plot_manager.update_res_temp_plot([], [], [])
     
     def set_R0(event):
+        """Gère la définition de R0"""
         value = plot_manager.textboxes['R0'].text
         measurements.set_R0(value)
     
     def set_Tcons(event):
+        """Gère la définition de Tcons"""
         value = plot_manager.textboxes['Tcons'].text
         success = measurements.set_Tcons(value)
         if success and measure_res_temp_active:
@@ -554,19 +563,23 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                 )
     
     def update_read_R0(event):
+        """Gère la lecture de R0"""
         R0 = measurements.read_R0()
         if R0 is not None:
             plot_manager.update_R0_display(R0)
     
     def push_open(event):
+        """Gère le bouton d'ouverture du vérin"""
         measurements.push_open_sensor()
         # Les voyants seront mis à jour par la lecture des pins
     
     def retract_close(event):
+        """Gère le bouton de rétraction du vérin"""
         measurements.retract_close_sensor()
         # Les voyants seront mis à jour par la lecture des pins
     
     def init_system(event):
+        """Gère l'initialisation du système"""
         measurements.init_system()
         # La couleur est maintenue automatiquement par le connect_button modifié
         
@@ -578,7 +591,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         )
     
     def start_full_protocol(self):
-        """Handle full protocol button click"""
+        """Gère le démarrage du protocole complet"""
         # Ne faire quelque chose que si le bouton est actif (pas déjà dans le protocole)
         if hasattr(plot_manager.buttons['protocole_complet'], 'active') and plot_manager.buttons['protocole_complet'].active:
             # Check si init a été effectué
@@ -632,7 +645,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                 plot_manager.update_protocol_button_states(False, False, False)
     
     def start_regeneration(event):
-        """Handle regeneration button click"""
+        """Gère le démarrage du protocole de régénération"""
         # Only do something if button is active (not already in regeneration)
         if hasattr(plot_manager.buttons['regeneration'], 'active') and plot_manager.buttons['regeneration'].active:
             # Check if conductance regen is in progress - don't allow both at the same time
@@ -723,6 +736,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         )
             
     def quit_program(event):
+        """Gère la fermeture du programme"""
         nonlocal escape_pressed
         # Définir Tcons à 0°C avant de fermer
         from core.constants import TCONS_LOW
@@ -1061,45 +1075,6 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
             }
             return False
             
-    def show_backup_notification(reason):
-        """
-        Affiche une notification à l'utilisateur concernant la sauvegarde d'urgence
-        
-        Args:
-            reason: Raison de la sauvegarde
-        """
-        nonlocal last_notification_time, notification_cooldown
-        
-        current_time = time.time()
-        # Limiter les notifications pour éviter de spammer l'utilisateur
-        if current_time - last_notification_time < notification_cooldown:
-            return
-            
-        # Mettre à jour le timestamp de la dernière notification
-        last_notification_time = current_time
-        
-        try:
-            # Créer une notification visuelle dans une nouvelle fenêtre indépendante
-            import tkinter as tk
-            from tkinter import messagebox
-            
-            # Créer une fenêtre Tkinter invisible pour éviter de perturber l'interface principale
-            root = tk.Tk()
-            root.withdraw()
-            
-            # Afficher le message contextuel
-            messagebox.showinfo(
-                "Sauvegarde d'urgence",
-                f"Une sauvegarde d'urgence a été effectuée.\n\n"
-                f"Raison: {reason}\n\n"
-                f"Les données ont été sauvegardées dans le dossier des résultats."
-            )
-            
-            # Détruire la fenêtre Tkinter
-            root.destroy()
-        except Exception as e:
-            print(f"Erreur lors de l'affichage de la notification: {e}")
-            
     def check_device_errors():
         """
         Vérifie les erreurs des appareils pour détecter des problèmes de connexion
@@ -1426,18 +1401,18 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                 plot_manager.fig.canvas.draw_idle()
     
     def start_conductance_regen(event):
-        """Handle conductance regeneration button click"""
-        # Only do something if button is active and not already in protocol
+        """Gérer le protocole de régénération de conductance"""
+        # Fonction pour démarrer le protocole de régénération de conductance
         if hasattr(plot_manager.buttons['conductance_regen'], 'active') and plot_manager.buttons['conductance_regen'].active:
-            # Check if CO2 regeneration is in progress - don't allow both at the same time
+            # Check si le protocole de régénération est déjà en cours
             if measurements.regeneration_in_progress or measurements.full_protocol_in_progress:
                 print("Impossible de démarrer le protocole Conductance pendant que le protocole CO2 est actif")
                 return
                 
-            # Start conductance regeneration protocol
+            # Lancer le protocole de régénération de conductance
             success = measurements.start_conductance_regen_protocol()
             if success:
-                # Update button state
+                # Actualiser l'état du bouton de régénération
                 plot_manager.update_regeneration_status({
                     'active': True,
                     'step': 1,
@@ -1445,7 +1420,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                     'progress': 0
                 })
                 
-                # Disable all protocol buttons while this protocol is active
+                # Desactiver le bouton de régénération
                 if 'regeneration' in plot_manager.buttons:
                     regeneration_co2_button = plot_manager.buttons['regeneration']
                     regeneration_co2_button.ax.set_facecolor('lightgray')
@@ -1469,7 +1444,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                 regeneration_button.label.set_color('black')
                 regeneration_button.active = False
                 
-                # Show cancel button
+                # Montrer le bouton d'annulation de la régénération
                 if 'cancel_regeneration' in plot_manager.buttons:
                     cancel_button = plot_manager.buttons['cancel_regeneration']
                     cancel_button.ax.set_visible(True)
