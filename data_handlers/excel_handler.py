@@ -412,15 +412,6 @@ class ExcelHandler:
             if sheet_name is None:
                 sheet_name = f"Cond_{datetime.now().strftime('%H%M%S')}"
                 
-            # Vérifier si cette feuille existe déjà
-            try:
-                wb = load_workbook(self.conductance_file)
-                if sheet_name in wb.sheetnames and sheet_name != "AutoSave":
-                    # Génère un nom alternatif en ajoutant un suffixe (sauf pour AutoSave)
-                    sheet_name = f"{sheet_name}_{self.conductance_series_count}"
-            except Exception as e:
-                print(f"Warning: Couldn't check for duplicate sheet names: {e}")
-                
             # Mémoriser comme feuille active
             self.active_conductance_sheet = sheet_name
             self.new_conductance_sheet_needed = False
@@ -428,35 +419,58 @@ class ExcelHandler:
         # Définir les données à sauvegarder
         data = {}
         
-        # Pour les données de la feuille courante, vérifier s'il faut ajouter le décalage temporel
-        try:
-            if sheet_name != "AutoSave" and sheet_name in load_workbook(self.conductance_file).sheetnames:
-                # La feuille existe déjà, il faut maintenir la continuité temporelle
+        # Pour AutoSave, on veut toujours continuer après le dernier point enregistré
+        if sheet_name == "AutoSave":
+            try:
                 wb = load_workbook(self.conductance_file)
-                ws = wb[sheet_name]
-                
-                # Déterminer le dernier temps enregistré
-                last_row = ws.max_row
-                if last_row > 1:  # Si la feuille contient déjà des données
-                    last_time = ws.cell(row=last_row, column=2).value  # Colonne 2 = Temps (s)
-                    if last_time is not None:
-                        # Ajuster les timestamps pour continuer après le dernier point
-                        data['Minutes'] = [(last_time + t) / 60.0 for t in timeList]
-                        data['Temps (s)'] = [last_time + t for t in timeList]
+                if "AutoSave" in wb.sheetnames:
+                    ws = wb["AutoSave"]
+                    last_row = ws.max_row
+                    if last_row > 1:  # Si la feuille contient déjà des données
+                        last_time = ws.cell(row=last_row, column=2).value  # Colonne 2 = Temps (s)
+                        if last_time is not None:
+                            # Ajuster les timestamps pour continuer après le dernier point
+                            data['Minutes'] = [(last_time + t) / 60.0 for t in timeList]
+                            data['Temps (s)'] = [last_time + t for t in timeList]
+                        else:
+                            data['Minutes'] = [t / 60.0 for t in timeList]
+                            data['Temps (s)'] = timeList
                     else:
                         data['Minutes'] = [t / 60.0 for t in timeList]
                         data['Temps (s)'] = timeList
                 else:
                     data['Minutes'] = [t / 60.0 for t in timeList]
                     data['Temps (s)'] = timeList
-            else:
-                # Nouvelle feuille ou AutoSave
+            except Exception as e:
+                print(f"Error checking for existing AutoSave data: {e}")
                 data['Minutes'] = [t / 60.0 for t in timeList]
                 data['Temps (s)'] = timeList
-        except Exception as e:
-            print(f"Error checking for existing data: {e}")
-            data['Minutes'] = [t / 60.0 for t in timeList]
-            data['Temps (s)'] = timeList
+        else:
+            # Pour les autres feuilles, même logique qu'avant
+            try:
+                if sheet_name in load_workbook(self.conductance_file).sheetnames:
+                    wb = load_workbook(self.conductance_file)
+                    ws = wb[sheet_name]
+                    
+                    last_row = ws.max_row
+                    if last_row > 1:
+                        last_time = ws.cell(row=last_row, column=2).value
+                        if last_time is not None:
+                            data['Minutes'] = [(last_time + t) / 60.0 for t in timeList]
+                            data['Temps (s)'] = [last_time + t for t in timeList]
+                        else:
+                            data['Minutes'] = [t / 60.0 for t in timeList]
+                            data['Temps (s)'] = timeList
+                    else:
+                        data['Minutes'] = [t / 60.0 for t in timeList]
+                        data['Temps (s)'] = timeList
+                else:
+                    data['Minutes'] = [t / 60.0 for t in timeList]
+                    data['Temps (s)'] = timeList
+            except Exception as e:
+                print(f"Error checking for existing data: {e}")
+                data['Minutes'] = [t / 60.0 for t in timeList]
+                data['Temps (s)'] = timeList
         
         data['Conductance (µS)'] = conductanceList
         data['Resistance (Ohms)'] = resistanceList
@@ -477,8 +491,8 @@ class ExcelHandler:
         # Sauvegarder ou mettre à jour la feuille
         result = False
         try:
-            # Vérifier si la feuille existe déjà pour l'ajouter ou la mettre à jour
             wb = load_workbook(self.conductance_file)
+            
             if sheet_name in wb.sheetnames:
                 # La feuille existe, mettre à jour les données
                 ws = wb[sheet_name]
@@ -552,15 +566,6 @@ class ExcelHandler:
             if sheet_name is None:
                 sheet_name = f"CO2_{datetime.now().strftime('%H%M%S')}"
                 
-            # Vérifier si cette feuille existe déjà
-            try:
-                wb = load_workbook(self.co2_temp_humidity_file)
-                if sheet_name in wb.sheetnames and sheet_name != "AutoSave":
-                    # Génère un nom alternatif en ajoutant un suffixe (sauf pour AutoSave)
-                    sheet_name = f"{sheet_name}_{self.co2_temp_humidity_series_count}"
-            except Exception as e:
-                print(f"Warning: Couldn't check for duplicate sheet names: {e}")
-                
             # Mémoriser comme feuille active
             self.active_co2_temp_humidity_sheet = sheet_name
             self.new_co2_temp_humidity_sheet_needed = False
@@ -568,35 +573,58 @@ class ExcelHandler:
         # Définir les données à sauvegarder
         data = {}
         
-        # Pour les données de la feuille courante, vérifier s'il faut ajouter le décalage temporel
-        try:
-            if sheet_name != "AutoSave" and sheet_name in load_workbook(self.co2_temp_humidity_file).sheetnames:
-                # La feuille existe déjà, il faut maintenir la continuité temporelle
+        # Pour AutoSave, on veut toujours continuer après le dernier point enregistré
+        if sheet_name == "AutoSave":
+            try:
                 wb = load_workbook(self.co2_temp_humidity_file)
-                ws = wb[sheet_name]
-                
-                # Déterminer le dernier temps enregistré
-                last_row = ws.max_row
-                if last_row > 1:  # Si la feuille contient déjà des données
-                    last_time = ws.cell(row=last_row, column=2).value  # Colonne 2 = Temps (s)
-                    if last_time is not None:
-                        # Ajuster les timestamps pour continuer après le dernier point
-                        data['Minutes'] = [(last_time + t) / 60.0 for t in timestamps]
-                        data['Temps (s)'] = [last_time + t for t in timestamps]
+                if "AutoSave" in wb.sheetnames:
+                    ws = wb["AutoSave"]
+                    last_row = ws.max_row
+                    if last_row > 1:  # Si la feuille contient déjà des données
+                        last_time = ws.cell(row=last_row, column=2).value  # Colonne 2 = Temps (s)
+                        if last_time is not None:
+                            # Ajuster les timestamps pour continuer après le dernier point
+                            data['Minutes'] = [(last_time + t) / 60.0 for t in timestamps]
+                            data['Temps (s)'] = [last_time + t for t in timestamps]
+                        else:
+                            data['Minutes'] = [t / 60.0 for t in timestamps]
+                            data['Temps (s)'] = timestamps
                     else:
                         data['Minutes'] = [t / 60.0 for t in timestamps]
                         data['Temps (s)'] = timestamps
                 else:
                     data['Minutes'] = [t / 60.0 for t in timestamps]
                     data['Temps (s)'] = timestamps
-            else:
-                # Nouvelle feuille ou AutoSave
+            except Exception as e:
+                print(f"Error checking for existing AutoSave data: {e}")
                 data['Minutes'] = [t / 60.0 for t in timestamps]
                 data['Temps (s)'] = timestamps
-        except Exception as e:
-            print(f"Error checking for existing data: {e}")
-            data['Minutes'] = [t / 60.0 for t in timestamps]
-            data['Temps (s)'] = timestamps
+        else:
+            # Pour les autres feuilles, même logique qu'avant
+            try:
+                if sheet_name in load_workbook(self.co2_temp_humidity_file).sheetnames:
+                    wb = load_workbook(self.co2_temp_humidity_file)
+                    ws = wb[sheet_name]
+                    
+                    last_row = ws.max_row
+                    if last_row > 1:
+                        last_time = ws.cell(row=last_row, column=2).value
+                        if last_time is not None:
+                            data['Minutes'] = [(last_time + t) / 60.0 for t in timestamps]
+                            data['Temps (s)'] = [last_time + t for t in timestamps]
+                        else:
+                            data['Minutes'] = [t / 60.0 for t in timestamps]
+                            data['Temps (s)'] = timestamps
+                    else:
+                        data['Minutes'] = [t / 60.0 for t in timestamps]
+                        data['Temps (s)'] = timestamps
+                else:
+                    data['Minutes'] = [t / 60.0 for t in timestamps]
+                    data['Temps (s)'] = timestamps
+            except Exception as e:
+                print(f"Error checking for existing data: {e}")
+                data['Minutes'] = [t / 60.0 for t in timestamps]
+                data['Temps (s)'] = timestamps
         
         data['CO2 (ppm)'] = co2_values
         data['Température (°C)'] = temp_values
@@ -619,8 +647,8 @@ class ExcelHandler:
         # Sauvegarder ou mettre à jour la feuille
         result = False
         try:
-            # Vérifier si la feuille existe déjà pour l'ajouter ou la mettre à jour
             wb = load_workbook(self.co2_temp_humidity_file)
+            
             if sheet_name in wb.sheetnames:
                 # La feuille existe, mettre à jour les données
                 ws = wb[sheet_name]
@@ -676,26 +704,6 @@ class ExcelHandler:
                 # La feuille n'existe pas, utiliser la méthode existante pour la créer
                 result = self.add_sheet_to_excel(self.co2_temp_humidity_file, sheet_name, data)
                 
-                # Ajouter deltaC et masseC après création si fournis
-                if result and (delta_c is not None or carbon_mass is not None):
-                    try:
-                        wb = load_workbook(self.co2_temp_humidity_file)
-                        if sheet_name in wb.sheetnames:
-                            ws = wb[sheet_name]
-                            last_col = ws.max_column
-                            
-                            if delta_c is not None:
-                                ws.cell(row=1, column=last_col+1, value="deltaC (ppm)")
-                                ws.cell(row=2, column=last_col+1, value=delta_c)
-                            
-                            if carbon_mass is not None:
-                                ws.cell(row=1, column=last_col+2, value="masseC (µg)")
-                                ws.cell(row=2, column=last_col+2, value=carbon_mass)
-                            
-                            wb.save(self.co2_temp_humidity_file)
-                    except Exception as e:
-                        print(f"Error adding deltaC and masseC cells: {e}")
-                
                 # Incrémenter le compteur à chaque nouvelle feuille (sauf AutoSave)
                 if sheet_name != "AutoSave":
                     self.co2_temp_humidity_series_count += 1
@@ -704,7 +712,6 @@ class ExcelHandler:
             result = self.add_sheet_to_excel(self.co2_temp_humidity_file, sheet_name, data)
         
         return result
-
     
     def save_temp_res_data(self, timestamps, temperatures, tcons_values, sheet_name=None):
         """
@@ -733,53 +740,66 @@ class ExcelHandler:
             # Si aucun nom de feuille n'est fourni ou si une nouvelle est nécessaire, créer un nom
             if sheet_name is None:
                 sheet_name = f"Temp_{datetime.now().strftime('%H%M%S')}"
-                
-            # Vérifier si cette feuille existe déjà
-            try:
-                wb = load_workbook(self.temp_res_file)
-                if sheet_name in wb.sheetnames and sheet_name != "AutoSave":
-                    # Génère un nom alternatif en ajoutant un suffixe (sauf pour AutoSave)
-                    sheet_name = f"{sheet_name}_{self.temp_res_series_count}"
-            except Exception as e:
-                print(f"Warning: Couldn't check for duplicate sheet names: {e}")
-                
+
             # Mémoriser comme feuille active
             self.active_temp_res_sheet = sheet_name
             self.new_temp_res_sheet_needed = False
-        
+
         # Définir les données à sauvegarder
         data = {}
-        
-        # Pour les données de la feuille courante, vérifier s'il faut ajouter le décalage temporel
-        try:
-            if sheet_name != "AutoSave" and sheet_name in load_workbook(self.temp_res_file).sheetnames:
-                # La feuille existe déjà, il faut maintenir la continuité temporelle
+
+        # Pour AutoSave, on veut toujours continuer après le dernier point enregistré
+        if sheet_name == "AutoSave":
+            try:
                 wb = load_workbook(self.temp_res_file)
-                ws = wb[sheet_name]
-                
-                # Déterminer le dernier temps enregistré
-                last_row = ws.max_row
-                if last_row > 1:  # Si la feuille contient déjà des données
-                    last_time = ws.cell(row=last_row, column=2).value  # Colonne 2 = Temps (s)
-                    if last_time is not None:
-                        # Ajuster les timestamps pour continuer après le dernier point
-                        data['Minutes'] = [(last_time + t) / 60.0 for t in timestamps]
-                        data['Temps (s)'] = [last_time + t for t in timestamps]
+                if "AutoSave" in wb.sheetnames:
+                    ws = wb["AutoSave"]
+                    last_row = ws.max_row
+                    if last_row > 1:
+                        last_time = ws.cell(row=last_row, column=2).value
+                        if last_time is not None:
+                            # Ajuster les timestamps pour continuer après le dernier point
+                            data['Minutes'] = [(last_time + t) / 60.0 for t in timestamps]
+                            data['Temps (s)'] = [last_time + t for t in timestamps]
+                        else:
+                            data['Minutes'] = [t / 60.0 for t in timestamps]
+                            data['Temps (s)'] = timestamps
                     else:
                         data['Minutes'] = [t / 60.0 for t in timestamps]
                         data['Temps (s)'] = timestamps
                 else:
                     data['Minutes'] = [t / 60.0 for t in timestamps]
                     data['Temps (s)'] = timestamps
-            else:
-                # Nouvelle feuille ou AutoSave
+            except Exception as e:
+                print(f"Error checking for existing AutoSave data: {e}")
                 data['Minutes'] = [t / 60.0 for t in timestamps]
                 data['Temps (s)'] = timestamps
-        except Exception as e:
-            print(f"Error checking for existing data: {e}")
-            data['Minutes'] = [t / 60.0 for t in timestamps]
-            data['Temps (s)'] = timestamps
-        
+        else:
+            try:
+                if sheet_name in load_workbook(self.temp_res_file).sheetnames:
+                    wb = load_workbook(self.temp_res_file)
+                    ws = wb[sheet_name]
+
+                    last_row = ws.max_row
+                    if last_row > 1:
+                        last_time = ws.cell(row=last_row, column=2).value
+                        if last_time is not None:
+                            data['Minutes'] = [(last_time + t) / 60.0 for t in timestamps]
+                            data['Temps (s)'] = [last_time + t for t in timestamps]
+                        else:
+                            data['Minutes'] = [t / 60.0 for t in timestamps]
+                            data['Temps (s)'] = timestamps
+                    else:
+                        data['Minutes'] = [t / 60.0 for t in timestamps]
+                        data['Temps (s)'] = timestamps
+                else:
+                    data['Minutes'] = [t / 60.0 for t in timestamps]
+                    data['Temps (s)'] = timestamps
+            except Exception as e:
+                print(f"Error checking for existing data: {e}")
+                data['Minutes'] = [t / 60.0 for t in timestamps]
+                data['Temps (s)'] = timestamps
+
         data['Température mesurée'] = temperatures
         data['Tcons'] = tcons_values
         
@@ -983,48 +1003,78 @@ class ExcelHandler:
         Args:
             workbook: Classeur Excel ouvert
         """
+        from openpyxl.chart import LineChart, Reference
+        from openpyxl.chart.axis import ChartLines
+        from openpyxl.drawing.line import LineProperties
+        from datetime import date
+        
         for sheet_name in workbook.sheetnames:
             if sheet_name.startswith("Cond_") or sheet_name == "Essais cumulés":
                 ws = workbook[sheet_name]
                 
-                # Créer un graphique
+                # Créer le graphique principal
                 chart = LineChart()
-                chart.title = f"Conductance - {sheet_name}"
-                chart.style = 1
+                
+                # Titre avec la date actuelle
+                today = date.today().strftime("%d/%m/%Y")
+                chart.title = f"Essai {today}"
+                chart.style = 2  # Style différent pour de meilleures couleurs par défaut
+                
+                # Configuration de l'axe principal (Conductance)
                 chart.y_axis.title = 'Conductance (µS)'
-                chart.x_axis.title = 'Temps (s)'
-
-                # Pour l'axe X :
-                chart.x_axis.majorTickMark = "out"  # Affiche les marques de graduation
-                chart.x_axis.minorTickMark = "none"  # Pas de graduations secondaires
-                chart.x_axis.tickLblPos = "nextTo"  # Position des étiquettes
-
-                # Pour l'axe Y :
+                chart.x_axis.title = 'Temps'
+                
+                # Forcer l'affichage des axes
+                chart.y_axis.delete = False
+                chart.x_axis.delete = False
+                
+                # Activer la grille principale
+                chart.y_axis.majorGridlines = ChartLines()
+                chart.x_axis.majorGridlines = ChartLines()
+                
+                # Configuration des graduations et étiquettes
                 chart.y_axis.majorTickMark = "out"
+                chart.x_axis.majorTickMark = "out"
                 chart.y_axis.minorTickMark = "none"
+                chart.x_axis.minorTickMark = "none"
                 chart.y_axis.tickLblPos = "nextTo"
-
-                # Optionnel: forcer une échelle spécifique si nécessaire
-                # chart.y_axis.scaling.min = 0
-                # chart.y_axis.scaling.max = 100
+                chart.x_axis.tickLblPos = "nextTo"
                 
-                # Références aux données
-                data = Reference(ws, min_col=3, min_row=1, max_col=3, max_row=ws.max_row)
+                # Références pour les données (en supposant que vos données commencent à la ligne 2)
                 categories = Reference(ws, min_col=2, min_row=2, max_row=ws.max_row)
+                conductance_data = Reference(ws, min_col=3, min_row=1, max_col=3, max_row=ws.max_row)
                 
-                # Ajouter les données au graphique
-                chart.add_data(data, titles_from_data=True)
+                # Ajouter la série Conductance
+                chart.add_data(conductance_data, titles_from_data=True)
                 chart.set_categories(categories)
                 
-                # Ajouter le graphique à la feuille en position H5
+                # Forcer le format de l'axe X pour qu'il affiche les valeurs numériques
+                chart.x_axis.number_format = '0.0'
+                
+                # Configurer la couleur de la série (bleue comme CO2)
+                if len(chart.series) >= 1:
+                    # Série Conductance (bleue)
+                    line_props_cond = LineProperties(solidFill="4472C4", w=25000)
+                    chart.series[0].graphicalProperties.line = line_props_cond
+                    chart.series[0].marker = None
+                    chart.series[0].smooth = False
+                
+                # Dimensionner le graphique
+                chart.width = 15
+                chart.height = 10
+                
+                # Position du graphique
                 ws.add_chart(chart, "H5")
                 
-                # Configurer la série pour n'avoir que des lignes sans marqueurs et aucun symbole
-                for series in chart.series:
-                    series.marker = None  # Supprime les marqueurs
-                    series.smooth = False  # Ligne droite entre les points
-                    # Optionnel: définir l'épaisseur de la ligne
-                    series.graphicalProperties.line.width = 20000  # Environ 1 pt
+                # Debug: vérifier les données
+                print(f"Feuille: {sheet_name}")
+                print(f"Nombre de lignes: {ws.max_row}")
+                print(f"Nombre de colonnes: {ws.max_column}")
+                
+                # Vérifier les en-têtes de colonnes
+                if ws.max_row > 1:
+                    print(f"En-têtes: {[ws.cell(1, col).value for col in range(1, min(4, ws.max_column + 1))]}")
+                    print(f"Première ligne de données: {[ws.cell(2, col).value for col in range(1, min(4, ws.max_column + 1))]}")
 
     def _add_co2_temp_humidity_charts(self, workbook):
         """
@@ -1033,67 +1083,121 @@ class ExcelHandler:
         Args:
             workbook: Classeur Excel ouvert
         """
+        from openpyxl.chart import LineChart, Reference
+        from openpyxl.chart.axis import ChartLines
+        from openpyxl.drawing.line import LineProperties
+        from openpyxl.drawing.colors import RGBPercent
+        from datetime import date
+        
         for sheet_name in workbook.sheetnames:
             if sheet_name.startswith("CO2_") or sheet_name == "Essais cumulés":
                 ws = workbook[sheet_name]
                 
-                # Graphique principal pour CO2
-                chart1 = LineChart()
-                chart1.title = f"CO2 - {sheet_name}"
-                chart1.style = 1
-                chart1.y_axis.title = 'CO2 (ppm)'
-                chart1.x_axis.title = 'Temps (s)'
-                # Pour l'axe X :
-                chart1.x_axis.majorTickMark = "out"  # Affiche les marques de graduation
-                chart1.x_axis.minorTickMark = "none"  # Pas de graduations secondaires
-                chart1.x_axis.tickLblPos = "nextTo"  # Position des étiquettes
-
-                # Pour l'axe Y :
-                chart1.y_axis.majorTickMark = "out"
-                chart1.y_axis.minorTickMark = "none"
-                chart1.y_axis.tickLblPos = "nextTo"
-
-                # Optionnel: forcer une échelle spécifique si nécessaire
-                # chart1.y_axis.scaling.min = 0
-                # chart1.y_axis.scaling.max = 100
+                # Créer le graphique principal
+                chart = LineChart()
                 
-                # Données CO2
-                co2_data = Reference(ws, min_col=3, min_row=1, max_col=3, max_row=ws.max_row)
+                # Titre avec la date actuelle
+                today = date.today().strftime("%d/%m/%Y")
+                chart.title = f"Essai {today}"
+                chart.style = 2  # Style différent pour de meilleures couleurs par défaut
+                
+                # Configuration de l'axe principal (CO2)
+                chart.y_axis.title = 'CO2 (ppm)'
+                chart.x_axis.title = 'Temps'
+                
+                # Forcer l'affichage des axes
+                chart.y_axis.delete = False
+                chart.x_axis.delete = False
+                
+                # Activer la grille principale
+                chart.y_axis.majorGridlines = ChartLines()
+                chart.x_axis.majorGridlines = ChartLines()
+                
+                # Configuration des graduations et étiquettes
+                chart.y_axis.majorTickMark = "out"
+                chart.x_axis.majorTickMark = "out"
+                chart.y_axis.minorTickMark = "none"
+                chart.x_axis.minorTickMark = "none"
+                chart.y_axis.tickLblPos = "nextTo"
+                chart.x_axis.tickLblPos = "nextTo"
+                
+                # Références pour les données (en supposant que vos données commencent à la ligne 2)
                 categories = Reference(ws, min_col=2, min_row=2, max_row=ws.max_row)
+                co2_data = Reference(ws, min_col=3, min_row=1, max_col=3, max_row=ws.max_row)
                 
-                chart1.add_data(co2_data, titles_from_data=True)
-                chart1.set_categories(categories)
+                # Ajouter la série CO2
+                chart.add_data(co2_data, titles_from_data=True)
+                chart.set_categories(categories)
                 
-                # Graphique secondaire pour température et humidité
-                chart2 = LineChart()
-                chart2.style = 1
+                # Forcer le format de l'axe X pour qu'il affiche les valeurs numériques
+                chart.x_axis.number_format = '0.0'
                 
-                # Données température et humidité
+                # Créer l'axe secondaire pour température et humidité
                 temp_data = Reference(ws, min_col=4, min_row=1, max_col=4, max_row=ws.max_row)
                 hum_data = Reference(ws, min_col=5, min_row=1, max_col=5, max_row=ws.max_row)
                 
-                chart2.add_data(temp_data, titles_from_data=True)
-                chart2.add_data(hum_data, titles_from_data=True)
+                chart.add_data(temp_data, titles_from_data=True)
+                chart.add_data(hum_data, titles_from_data=True)
                 
-                # Combiner les graphiques
-                chart1.y_axis.majorGridlines = None
-                chart2.y_axis.axId = 20
-                chart1 += chart2
+                # Configuration de l'axe secondaire (droite)
+                if len(chart.series) >= 2:
+                    # Assigner les séries température et humidité à l'axe secondaire
+                    chart.series[1].yAxisId = 200
+                    chart.series[2].yAxisId = 200
                 
-                # Configurer l'axe secondaire
-                chart1.y_axis.crosses = "max"
-                chart2.y_axis.title = "Température (°C) et Humidité (%)"
+                # Créer l'axe Y secondaire
+                from openpyxl.chart.axis import NumericAxis
+                chart.y_axis.axId = 100
+                chart.y_axis.crosses = "autoZero"
                 
-                # Ajouter le graphique combiné en position H5
-                ws.add_chart(chart1, "H5")
+                # Axe secondaire avec configuration complète
+                ax2 = NumericAxis(axId=200)
+                ax2.title = "Température (°C) et Humidité (%)"
+                ax2.crosses = "max"
+                ax2.majorTickMark = "out"
+                ax2.minorTickMark = "none"
+                ax2.tickLblPos = "nextTo"  # Forcer l'affichage des étiquettes
+                ax2.delete = False  # Ne pas supprimer l'axe
                 
-                # Configurer les séries pour n'avoir que des lignes sans marqueurs et lignes droites
-                for series in chart1.series:
-                    series.marker = None  # Supprime les marqueurs
-                    series.smooth = False  # Ligne droite entre les points
-                    # Optionnel: définir l'épaisseur de la ligne
-                    series.graphicalProperties.line.width = 20000  # Environ 1 pt
-
+                chart.y_axis_2 = ax2
+                
+                # Configurer les couleurs des séries
+                if len(chart.series) >= 3:
+                    # Série CO2 (bleue)
+                    line_props_co2 = LineProperties(solidFill="4472C4", w=25000)
+                    chart.series[0].graphicalProperties.line = line_props_co2
+                    chart.series[0].marker = None
+                    chart.series[0].smooth = False
+                    
+                    # Série Température (rouge)
+                    line_props_temp = LineProperties(solidFill="E15759", w=25000)
+                    chart.series[1].graphicalProperties.line = line_props_temp
+                    chart.series[1].marker = None
+                    chart.series[1].smooth = False
+                    
+                    # Série Humidité (verte)
+                    line_props_hum = LineProperties(solidFill="70AD47", w=25000)
+                    chart.series[2].graphicalProperties.line = line_props_hum
+                    chart.series[2].marker = None
+                    chart.series[2].smooth = False
+                
+                # Dimensionner le graphique
+                chart.width = 15
+                chart.height = 10
+                
+                # Position du graphique
+                ws.add_chart(chart, "H5")
+                
+                # Debug: vérifier les données
+                print(f"Feuille: {sheet_name}")
+                print(f"Nombre de lignes: {ws.max_row}")
+                print(f"Nombre de colonnes: {ws.max_column}")
+                
+                # Vérifier les en-têtes de colonnes
+                if ws.max_row > 1:
+                    print(f"En-têtes: {[ws.cell(1, col).value for col in range(1, min(6, ws.max_column + 1))]}")
+                    print(f"Première ligne de données: {[ws.cell(2, col).value for col in range(1, min(6, ws.max_column + 1))]}")
+                
     def _add_temp_res_charts(self, workbook):
         """
         Ajoute les graphiques pour les données température/résistance
@@ -1101,53 +1205,87 @@ class ExcelHandler:
         Args:
             workbook: Classeur Excel ouvert
         """
+        from openpyxl.chart import LineChart, Reference
+        from openpyxl.chart.axis import ChartLines
+        from openpyxl.drawing.line import LineProperties
+        from datetime import date
+        
         for sheet_name in workbook.sheetnames:
             if sheet_name.startswith("Temp_") or sheet_name == "Essais cumulés":
                 ws = workbook[sheet_name]
                 
-                # Créer un graphique
+                # Créer le graphique principal
                 chart = LineChart()
-                chart.title = f"Température - {sheet_name}"
-                chart.style = 1
-                # Pour l'axe X :
-                chart.x_axis.majorTickMark = "out"  # Affiche les marques de graduation
-                chart.x_axis.minorTickMark = "in"  # Pas de graduations secondaires
-                chart.x_axis.tickLblPos = "nextTo"  # Position des étiquettes
-
-                # Pour l'axe Y :
-                chart.y_axis.majorTickMark = "out"
-                chart.y_axis.minorTickMark = "in"
-                chart.y_axis.tickLblPos = "nextTo"
-                chart.y_axis.title = 'Température (°C)'
-                chart.x_axis.title = 'Temps (s)'
-
                 
-                # Références aux données
+                # Titre avec la date actuelle
+                today = date.today().strftime("%d/%m/%Y")
+                chart.title = f"Essai {today}"
+                chart.style = 2  # Style différent pour de meilleures couleurs par défaut
+                
+                # Configuration de l'axe principal (Température)
+                chart.y_axis.title = 'Température (°C)'
+                chart.x_axis.title = 'Temps'
+                
+                # Forcer l'affichage des axes
+                chart.y_axis.delete = False
+                chart.x_axis.delete = False
+                
+                # Activer la grille principale
+                chart.y_axis.majorGridlines = ChartLines()
+                chart.x_axis.majorGridlines = ChartLines()
+                
+                # Configuration des graduations et étiquettes
+                chart.y_axis.majorTickMark = "out"
+                chart.x_axis.majorTickMark = "out"
+                chart.y_axis.minorTickMark = "none"
+                chart.x_axis.minorTickMark = "none"
+                chart.y_axis.tickLblPos = "nextTo"
+                chart.x_axis.tickLblPos = "nextTo"
+                
+                # Références pour les données (en supposant que vos données commencent à la ligne 2)
+                categories = Reference(ws, min_col=2, min_row=2, max_row=ws.max_row)
                 temp_data = Reference(ws, min_col=3, min_row=1, max_col=3, max_row=ws.max_row)
                 tcons_data = Reference(ws, min_col=4, min_row=1, max_col=4, max_row=ws.max_row)
-                categories = Reference(ws, min_col=2, min_row=2, max_row=ws.max_row)
                 
-                # Ajouter les données au graphique
+                # Ajouter les séries
                 chart.add_data(temp_data, titles_from_data=True)
                 chart.add_data(tcons_data, titles_from_data=True)
                 chart.set_categories(categories)
                 
-                # Configurer les séries - Couleurs différentes mais sans marqueurs
-                s1 = chart.series[0]
-                s1.marker = None
-                s1.smooth = False  # Ligne droite entre les points
-                s1.graphicalProperties.line.solidFill = "FF0000"  # Rouge pour température mesurée
-                s1.graphicalProperties.line.width = 20000  # Environ 1 pt
+                # Forcer le format de l'axe X pour qu'il affiche les valeurs numériques
+                chart.x_axis.number_format = '0.0'
                 
-                s2 = chart.series[1]
-                s2.marker = None
-                s2.smooth = False  # Ligne droite entre les points
-                s2.graphicalProperties.line.solidFill = "0000FF"  # Bleu pour Tcons
-                s2.graphicalProperties.line.width = 20000  # Environ 1 pt
+                # Configurer les couleurs des séries
+                if len(chart.series) >= 2:
+                    # Série Température (rouge)
+                    line_props_temp = LineProperties(solidFill="E15759", w=25000)
+                    chart.series[0].graphicalProperties.line = line_props_temp
+                    chart.series[0].marker = None
+                    chart.series[0].smooth = False
+                    
+                    # Série Tcons (bleue)
+                    line_props_tcons = LineProperties(solidFill="4472C4", w=25000)
+                    chart.series[1].graphicalProperties.line = line_props_tcons
+                    chart.series[1].marker = None
+                    chart.series[1].smooth = False
                 
-                # Ajouter le graphique à la feuille en position H5
+                # Dimensionner le graphique
+                chart.width = 15
+                chart.height = 10
+                
+                # Position du graphique
                 ws.add_chart(chart, "H5")
-
+                
+                # Debug: vérifier les données
+                print(f"Feuille: {sheet_name}")
+                print(f"Nombre de lignes: {ws.max_row}")
+                print(f"Nombre de colonnes: {ws.max_column}")
+                
+                # Vérifier les en-têtes de colonnes
+                if ws.max_row > 1:
+                    print(f"En-têtes: {[ws.cell(1, col).value for col in range(1, min(5, ws.max_column + 1))]}")
+                    print(f"Première ligne de données: {[ws.cell(2, col).value for col in range(1, min(5, ws.max_column + 1))]}")
+                    
     def _should_create_cumulative_sheet(self, file_path):
         """Détermine si une feuille 'Essais cumulés' doit être créée"""
         if "conductance" in os.path.basename(file_path).lower():

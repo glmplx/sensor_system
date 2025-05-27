@@ -269,9 +269,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
     
     # Variables pour la sauvegarde de secours
     last_backup_time = time.time()
-    backup_interval = 500  # Sauvegarde automatique toutes les 500 secondes (environ 8 minutes)
-    last_notification_time = time.time()  # Pour limiter les notifications
-    notification_cooldown = 30  # 30 secondes entre les notifications
+    backup_interval = 10 if auto_save else float('inf')  # Désactive si auto_save est False
     emergency_mode = False  # Indique si on est en mode d'urgence
     device_error_count = {
         'arduino': 0,
@@ -931,6 +929,10 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
             bool: True si des données ont été sauvegardées, False sinon
         """
         nonlocal last_backup_status, emergency_mode
+
+        # Ajoutez cette vérification au début de la fonction
+        if not auto_save and "automatique" in reason:
+            return False
         
         try:
             data_saved = False
@@ -2263,7 +2265,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
             device_error_count = {k: max(0, v - 2) for k, v in device_error_count.items()}
         
         # Sauvegarde périodique (seulement si des mesures sont actives)
-        elif current_time - last_backup_time > effective_interval and (measure_conductance_active or measure_co2_temp_humidity_active or measure_res_temp_active):
+        elif (auto_save and current_time - last_backup_time > effective_interval and (measure_conductance_active or measure_co2_temp_humidity_active or measure_res_temp_active)):
             time_since_last = int(current_time - last_backup_time)
             backup_reason = f"sauvegarde automatique après {time_since_last} secondes"
             should_backup = True
