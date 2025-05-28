@@ -3,6 +3,10 @@ Constantes utilisées dans toute l'application de système de capteurs.
 Définit les seuils, paramètres et configurations pour les différents dispositifs et protocoles.
 """
 
+# Configuration de stockage des données
+EXCEL_BASE_DIR = "donnees_excel"  # Répertoire de base pour le stockage des fichiers Excel générés
+AUTOSAVE_INTERVAL = 500  # Intervalle de sauvegarde automatique en secondes (par défaut: 500s)
+
 # Constantes de mesure pour la détection de conductance
 STABILITY_DURATION = 120 # Durée requise en secondes pour considérer la conductance comme stable
 INCREASE_SLOPE_MIN = 0.1 # Seuil minimum pour la pente d'augmentation de conductance en µS/s

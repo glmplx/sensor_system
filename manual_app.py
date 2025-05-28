@@ -17,7 +17,7 @@ from devices.regen_device import RegenDevice
 from core.measurement_manager import MeasurementManager
 from data_handlers.excel_handler import ExcelHandler
 from ui.plot_manager import PlotManager
-from core.constants import EXCEL_BASE_DIR
+from core.constants import EXCEL_BASE_DIR, AUTOSAVE_INTERVAL
 
 def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_rate=None,
          measure_conductance=1, measure_co2=1, measure_regen=1, auto_save=True, save_data=True,
@@ -269,7 +269,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
     
     # Variables pour la sauvegarde de secours
     last_backup_time = time.time()
-    backup_interval = 10 if auto_save else float('inf')  # Désactive si auto_save est False
+    backup_interval = AUTOSAVE_INTERVAL if auto_save else float('inf')  # Désactive si auto_save est False
     emergency_mode = False  # Indique si on est en mode d'urgence
     device_error_count = {
         'arduino': 0,

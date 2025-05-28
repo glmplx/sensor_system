@@ -12,7 +12,7 @@ import requests
 from urllib.error import URLError
 
 from core.constants import (
-    EXCEL_BASE_DIR,
+    EXCEL_BASE_DIR, AUTOSAVE_INTERVAL,
     # Constantes de conductance
     STABILITY_DURATION, INCREASE_SLOPE_MIN, INCREASE_SLOPE_MAX,
     DECREASE_SLOPE_THRESHOLD, SLIDING_WINDOW, R0_THRESHOLD,
@@ -555,28 +555,52 @@ class MenuUI:
             
             # Utiliser execv pour remplacer le processus actuel (pas de sous-processus)
             os.execv(sys.executable, command)
-    
+
     def open_documentation(self):
+        """Lance mkdocs serve ou ouvre le README si échec"""
+        try:
+            # Essayer d'abord la méthode normale avec MkDocs
+            self._open_mkdocs_documentation()
+        except Exception as e:
+            print(f"Erreur avec MkDocs: {e} - Ouverture du README à la place")
+            self._open_readme_fallback()
+
+    def _open_readme_fallback(self):
+        """Ouvre le README.md comme solution de repli"""
+        readme_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "README.md")
+        if os.path.exists(readme_path):
+            if sys.platform.startswith('win'):
+                os.startfile(readme_path)
+            elif sys.platform == 'darwin':
+                subprocess.call(['open', readme_path])
+            else:
+                subprocess.call(['xdg-open', readme_path])
+        else:
+            messagebox.showerror("Erreur", "Le fichier README.md n'a pas pu être trouvé")
+    
+    def _open_mkdocs_documentation(self):
         """Lance mkdocs serve et ouvre la documentation dans un navigateur"""
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        
+        # Vérifier si nous sommes dans un exécutable PyInstaller
+        if getattr(sys, 'frozen', False):
+            base_dir = sys._MEIPASS
+        
         mkdocs_path = os.path.join(base_dir, "mkdocs.yml")
 
         if not os.path.exists(mkdocs_path):
-            tk.messagebox.showerror("Erreur", "Fichier mkdocs.yml non trouvé. Veuillez exécuter mkdocs_script.py d'abord.")
+            tk.messagebox.showerror("Erreur", "Fichier mkdocs.yml non trouvé.")
             return
         
-        # Vérifier que mkdocs est installé
+        # Vérifier que mkdocs est disponible (même dans l'exécutable)
         try:
-            subprocess.run(["mkdocs", "--version"], 
-                        check=True, 
-                        stdout=subprocess.PIPE, 
-                        stderr=subprocess.PIPE,
-                        shell=sys.platform.startswith('win'))
-        except (subprocess.SubprocessError, FileNotFoundError):
+            # Dans un exécutable, nous pouvons directement importer mkdocs
+            import mkdocs
+        except ImportError:
             tk.messagebox.showerror(
                 "Erreur",
-                "MkDocs n'est pas correctement installé ou n'est pas dans le PATH.\n"
-                "Veuillez l'installer avec: pip install mkdocs mkdocs-material"
+                "MkDocs n'est pas disponible.\n"
+                "Cette fonctionnalité n'est pas incluse dans cette version."
             )
             return
             
@@ -755,7 +779,7 @@ class ConstantsConfigWindow:
         # Créer une nouvelle fenêtre
         self.window = tk.Toplevel(parent.window)
         self.window.title("Configuration des paramètres de protocole")
-        self.window.geometry("600x700")
+        self.window.geometry("750x700")
         self.window.resizable(True, True)
         self.window.transient(parent.window)  # Cette fenêtre dépend de la fenêtre parent
         self.window.grab_set()  # Bloque les interactions avec la fenêtre parent
@@ -788,6 +812,31 @@ class ConstantsConfigWindow:
         content_frame = tk.Frame(canvas)
         canvas.create_window((0, 0), window=content_frame, anchor="nw")
 
+        # Section des paramètres généraux
+        general_frame = ttk.LabelFrame(content_frame, text="Paramètres généraux")
+        general_frame.pack(fill=tk.X, expand=1, padx=5, pady=5)
+
+        general_params = [
+            ("AUTOSAVE_INTERVAL", "Intervalle sauvegarde auto (s)", AUTOSAVE_INTERVAL, "Intervalle en secondes entre les sauvegardes automatiques"),
+            ("VALVE_DELAY", "Délai vanne (s)", VALVE_DELAY, "Délai d'attente en secondes après opération d'ouverture/fermeture de vanne")
+        ]
+
+        for i, (const_name, label_text, current_value, tooltip) in enumerate(general_params):
+            row_frame = tk.Frame(general_frame)
+            row_frame.pack(fill=tk.X, padx=5, pady=2)
+
+            label = tk.Label(row_frame, text=label_text, width=25, anchor="w")
+            label.pack(side=tk.LEFT, padx=5)
+
+            entry = tk.Entry(row_frame, width=10)
+            entry.insert(0, str(current_value))
+            entry.pack(side=tk.LEFT, padx=5)
+
+            info_label = tk.Label(row_frame, text=tooltip, fg="gray", anchor="w")
+            info_label.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=1)
+
+            self.entries[const_name] = entry
+
         # Section des constantes de conductance
         conductance_frame = ttk.LabelFrame(content_frame, text="Paramètres de détection de conductance")
         conductance_frame.pack(fill=tk.X, expand=1, padx=5, pady=5)
@@ -805,32 +854,6 @@ class ConstantsConfigWindow:
 
         for i, (const_name, label_text, current_value, tooltip) in enumerate(conductance_params):
             row_frame = tk.Frame(conductance_frame)
-            row_frame.pack(fill=tk.X, padx=5, pady=2)
-
-            label = tk.Label(row_frame, text=label_text, width=25, anchor="w")
-            label.pack(side=tk.LEFT, padx=5)
-
-            entry = tk.Entry(row_frame, width=10)
-            entry.insert(0, str(current_value))
-            entry.pack(side=tk.LEFT, padx=5)
-
-            info_label = tk.Label(row_frame, text=tooltip, fg="gray", anchor="w")
-            info_label.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=1)
-
-            self.entries[const_name] = entry
-
-        # Section des constantes de températuree
-        temp_frame = ttk.LabelFrame(content_frame, text="Paramètres de température")
-        temp_frame.pack(fill=tk.X, expand=1, padx=5, pady=5)
-
-        temp_params = [
-            ("REGENERATION_TEMP", "Température de régénération (°C)", REGENERATION_TEMP, "Température en °C pour la régénération"),
-            ("TCONS_LOW", "Point de consigne bas (°C)", TCONS_LOW, "Point de consigne basse température en °C"),
-            ("VALVE_DELAY", "Délai vanne (s)", VALVE_DELAY, "Délai d'attente en secondes après opération d'ouverture/fermeture de vanne")
-        ]
-
-        for i, (const_name, label_text, current_value, tooltip) in enumerate(temp_params):
-            row_frame = tk.Frame(temp_frame)
             row_frame.pack(fill=tk.X, padx=5, pady=2)
 
             label = tk.Label(row_frame, text=label_text, width=25, anchor="w")
@@ -873,6 +896,31 @@ class ConstantsConfigWindow:
 
             self.entries[const_name] = entry
 
+        # Section des constantes de températuree
+        temp_frame = ttk.LabelFrame(content_frame, text="Paramètres de température")
+        temp_frame.pack(fill=tk.X, expand=1, padx=5, pady=5)
+
+        temp_params = [
+            ("REGENERATION_TEMP", "Température de régénération (°C)", REGENERATION_TEMP, "Température en °C pour la régénération"),
+            ("TCONS_LOW", "Point de consigne bas (°C)", TCONS_LOW, "Point de consigne basse température en °C")
+        ]
+
+        for i, (const_name, label_text, current_value, tooltip) in enumerate(temp_params):
+            row_frame = tk.Frame(temp_frame)
+            row_frame.pack(fill=tk.X, padx=5, pady=2)
+
+            label = tk.Label(row_frame, text=label_text, width=25, anchor="w")
+            label.pack(side=tk.LEFT, padx=5)
+
+            entry = tk.Entry(row_frame, width=10)
+            entry.insert(0, str(current_value))
+            entry.pack(side=tk.LEFT, padx=5)
+
+            info_label = tk.Label(row_frame, text=tooltip, fg="gray", anchor="w")
+            info_label.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=1)
+
+            self.entries[const_name] = entry
+
         # Boutons de contrôle
         button_frame = tk.Frame(self.window)
         button_frame.pack(pady=10)
@@ -891,6 +939,11 @@ class ConstantsConfigWindow:
 
     def reset_values(self):
         """Réinitialise les champs aux valeurs par défaut"""
+
+        # Réinitialiser les paramètres généraux
+        self.entries["AUTOSAVE_INTERVAL"].delete(0, tk.END)
+        self.entries["AUTOSAVE_INTERVAL"].insert(0, str(AUTOSAVE_INTERVAL))
+
         # Réinitialiser les valeurs de conductance
         self.entries["STABILITY_DURATION"].delete(0, tk.END)
         self.entries["STABILITY_DURATION"].insert(0, str(STABILITY_DURATION))
