@@ -44,7 +44,7 @@ Le système permet de détecter automatiquement les variations de conductance, d
 
 1. Installer les bibliothèques requises :
    ```
-   pip install matplotlib numpy openpyxl pyserial pyvisa
+   pip install matplotlib numpy openpyxl pyserial pyvisa mkdocs
    ```
 
 2. Connecter les appareils aux ports USB de l'ordinateur
