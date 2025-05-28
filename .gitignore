@@ -1,1 +1,14 @@
+# Dossiers générés par PyInstaller ou des outils de build
+build/
+dist/
+.claude/
 
+# Exécutable généré
+SensorSystemInstaller
+SensorSystemInstaller.exe
+
+# Fichiers cachés ou spécifiques au système
+.DS_Store       (pour macOS)
+__pycache__/    (dossier de cache Python)
+*.pyc           (fichiers compilés Python)
+*.spec          (fichier spec de PyInstaller)
