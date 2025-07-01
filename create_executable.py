@@ -79,12 +79,18 @@ a = Analysis(
     # Add data files if they exist
     if os.path.exists(os.path.join(current_dir, 'README.md')):
         spec_content += "        ('" + os.path.join(current_dir_norm, 'README.md') + "', '.'),\n"
+        
     if os.path.exists(os.path.join(current_dir, 'DOCUMENTATION.md')):
         spec_content += "        ('" + os.path.join(current_dir_norm, 'DOCUMENTATION.md') + "', '.'),\n"
+
     if os.path.exists(os.path.join(current_dir, 'mkdocs.yml')):
         spec_content += "        ('" + os.path.join(current_dir_norm, 'mkdocs.yml') + "', '.'),\n"
+
     if os.path.exists(os.path.join(current_dir, 'docs')) and os.path.isdir(os.path.join(current_dir, 'docs')):
         spec_content += "        ('" + os.path.join(current_dir_norm, 'docs') + "', 'docs'),\n"
+
+    if os.path.exists(os.path.join(current_dir, 'modules_vba')) and os.path.isdir(os.path.join(current_dir, 'modules_vba')):
+        spec_content += "        ('" + os.path.join(current_dir_norm, 'modules_vba') + "', 'modules_vba'),\n"
     
     spec_content += """    ],
     hiddenimports=[
@@ -209,6 +215,7 @@ Cet exécutable contient le systeme complet de capteurs. Il ne nécessite pas d'
         if os.path.exists(config_path) and not os.path.exists(dist_config):
             shutil.copy2(config_path, dist_config)
             print("Copied sensor_config.json to dist folder")
+        
         
         # Copy other documentation files
         docs_files = {

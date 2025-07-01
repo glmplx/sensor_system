@@ -1049,13 +1049,22 @@ class ExcelHandler:
             if sheet_name.startswith("Cond_") or sheet_name == "Essais cumulés":
                 ws = workbook[sheet_name]
                 
+                # Supprimer les graphiques existants pour éviter l'accumulation
+                charts_to_remove = []
+                for chart in ws._charts:
+                    if chart.anchor.startswith("H5"):
+                        charts_to_remove.append(chart)
+                
+                for chart in charts_to_remove:
+                    ws._charts.remove(chart)
+                
                 # Créer le graphique principal
                 chart = LineChart()
                 
                 # Titre avec la date actuelle
                 today = date.today().strftime("%d/%m/%Y")
                 chart.title = f"Essai {today}"
-                chart.style = 2  # Style différent pour de meilleures couleurs par défaut
+                chart.style = 2
                 
                 # Configuration de l'axe principal (Conductance)
                 chart.y_axis.title = 'Conductance (µS)'
@@ -1065,9 +1074,11 @@ class ExcelHandler:
                 chart.y_axis.delete = False
                 chart.x_axis.delete = False
                 
-                # Activer la grille principale
-                chart.y_axis.majorGridlines = ChartLines()
-                chart.x_axis.majorGridlines = ChartLines()
+                # Activer la grille principale (une seule fois)
+                if not hasattr(chart.y_axis, 'majorGridlines') or chart.y_axis.majorGridlines is None:
+                    chart.y_axis.majorGridlines = ChartLines()
+                if not hasattr(chart.x_axis, 'majorGridlines') or chart.x_axis.majorGridlines is None:
+                    chart.x_axis.majorGridlines = ChartLines()
                 
                 # Configuration des graduations et étiquettes
                 chart.y_axis.majorTickMark = "out"
@@ -1120,15 +1131,25 @@ class ExcelHandler:
         Args:
             workbook: Classeur Excel ouvert
         """
-        from openpyxl.chart import LineChart, Reference
+        from openpyxl.chart import ScatterChart, Reference, LineChart
+        from openpyxl.chart.series import Series
         from openpyxl.chart.axis import ChartLines
         from openpyxl.drawing.line import LineProperties
-        from openpyxl.drawing.colors import RGBPercent
+        from openpyxl.drawing.colors import ColorChoice
         from datetime import date
         
         for sheet_name in workbook.sheetnames:
             if sheet_name.startswith("CO2_") or sheet_name == "Essais cumulés":
                 ws = workbook[sheet_name]
+                
+                # Supprimer les graphiques existants pour éviter l'accumulation
+                charts_to_remove = []
+                for chart in ws._charts:
+                    if chart.anchor.startswith("H5"):
+                        charts_to_remove.append(chart)
+                
+                for chart in charts_to_remove:
+                    ws._charts.remove(chart)
                 
                 # Créer le graphique principal
                 chart = LineChart()
@@ -1136,7 +1157,7 @@ class ExcelHandler:
                 # Titre avec la date actuelle
                 today = date.today().strftime("%d/%m/%Y")
                 chart.title = f"Essai {today}"
-                chart.style = 2  # Style différent pour de meilleures couleurs par défaut
+                chart.style = 21
                 
                 # Configuration de l'axe principal (CO2)
                 chart.y_axis.title = 'CO2 (ppm)'
@@ -1146,9 +1167,11 @@ class ExcelHandler:
                 chart.y_axis.delete = False
                 chart.x_axis.delete = False
                 
-                # Activer la grille principale
-                chart.y_axis.majorGridlines = ChartLines()
-                chart.x_axis.majorGridlines = ChartLines()
+                # Activer la grille principale (une seule fois)
+                if not hasattr(chart.y_axis, 'majorGridlines') or chart.y_axis.majorGridlines is None:
+                    chart.y_axis.majorGridlines = ChartLines()
+                if not hasattr(chart.x_axis, 'majorGridlines') or chart.x_axis.majorGridlines is None:
+                    chart.x_axis.majorGridlines = ChartLines()
                 
                 # Configuration des graduations et étiquettes
                 chart.y_axis.majorTickMark = "out"
@@ -1193,8 +1216,8 @@ class ExcelHandler:
                 ax2.crosses = "max"
                 ax2.majorTickMark = "out"
                 ax2.minorTickMark = "none"
-                ax2.tickLblPos = "nextTo"  # Forcer l'affichage des étiquettes
-                ax2.delete = False  # Ne pas supprimer l'axe
+                ax2.tickLblPos = "nextTo"
+                ax2.delete = False
                 
                 chart.y_axis_2 = ax2
                 
@@ -1251,13 +1274,22 @@ class ExcelHandler:
             if sheet_name.startswith("Temp_") or sheet_name == "Essais cumulés":
                 ws = workbook[sheet_name]
                 
+                # Supprimer les graphiques existants pour éviter l'accumulation
+                charts_to_remove = []
+                for chart in ws._charts:
+                    if chart.anchor.startswith("H5"):
+                        charts_to_remove.append(chart)
+                
+                for chart in charts_to_remove:
+                    ws._charts.remove(chart)
+                
                 # Créer le graphique principal
                 chart = LineChart()
                 
                 # Titre avec la date actuelle
                 today = date.today().strftime("%d/%m/%Y")
                 chart.title = f"Essai {today}"
-                chart.style = 2  # Style différent pour de meilleures couleurs par défaut
+                chart.style = 2
                 
                 # Configuration de l'axe principal (Température)
                 chart.y_axis.title = 'Température (°C)'
@@ -1267,9 +1299,11 @@ class ExcelHandler:
                 chart.y_axis.delete = False
                 chart.x_axis.delete = False
                 
-                # Activer la grille principale
-                chart.y_axis.majorGridlines = ChartLines()
-                chart.x_axis.majorGridlines = ChartLines()
+                # Activer la grille principale (une seule fois)
+                if not hasattr(chart.y_axis, 'majorGridlines') or chart.y_axis.majorGridlines is None:
+                    chart.y_axis.majorGridlines = ChartLines()
+                if not hasattr(chart.x_axis, 'majorGridlines') or chart.x_axis.majorGridlines is None:
+                    chart.x_axis.majorGridlines = ChartLines()
                 
                 # Configuration des graduations et étiquettes
                 chart.y_axis.majorTickMark = "out"
@@ -1323,6 +1357,7 @@ class ExcelHandler:
                     print(f"En-têtes: {[ws.cell(1, col).value for col in range(1, min(5, ws.max_column + 1))]}")
                     print(f"Première ligne de données: {[ws.cell(2, col).value for col in range(1, min(5, ws.max_column + 1))]}")
                     
+                    
     def _should_create_cumulative_sheet(self, file_path):
         """Détermine si une feuille 'Essais cumulés' doit être créée"""
         if "conductance" in os.path.basename(file_path).lower():
@@ -1332,3 +1367,4 @@ class ExcelHandler:
         elif "temperature_resistance" in os.path.basename(file_path).lower():
             return self.temp_res_series_count >= 2
         return False
+        
