@@ -49,6 +49,7 @@ class PlotManager:
         # Boutons d'ajout d'appareils
         self.add_device_buttons = {}
         
+        
         # Configuration de la figure et des graphiques
         self.setup_plots()
     
@@ -168,6 +169,7 @@ class PlotManager:
         
         # Add common elements
         self.setup_common_elements()
+        
     
     def setup_manual_buttons(self):
         """Configure les boutons pour le mode manuel"""
@@ -820,6 +822,14 @@ class PlotManager:
         ax.plot(plot_time, conductanceList, color='blue', linewidth=2)
         ax.set_xlabel(f'Temps ({time_unit})')
         ax.set_ylabel('Conductance (µS)')
+        
+        # Recréer les éléments du curseur après le clear()
+        if 'conductance' not in self.crosshair_h:
+            self.crosshair_h['conductance'] = ax.axhline(y=0, color='red', linestyle='--', linewidth=1.5, alpha=0.7, visible=False)
+            self.crosshair_v['conductance'] = ax.axvline(x=0, color='red', linestyle='--', linewidth=1.5, alpha=0.7, visible=False)
+            self.coord_text['conductance'] = ax.text(0.02, 0.98, '', transform=ax.transAxes, 
+                                                   bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.8),
+                                                   verticalalignment='top', fontsize=9, visible=False)
         
         # Add event markers if provided
         has_markers = False
@@ -1553,3 +1563,4 @@ class PlotManager:
                 
         except Exception as e:
             print(f"Could not set close callback: {e}")
+    

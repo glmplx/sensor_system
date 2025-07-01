@@ -6,19 +6,12 @@ Gère la communication série avec l'appareil qui contrôle la température de l
 import serial
 import time
 from serial.serialutil import SerialException
-from core.constants import (
-    REGEN_DEFAULT_BAUD_RATE,
-    REGEN_DEFAULT_TIMEOUT,
-    REGEN_COMMAND_DELAY,
-    REGEN_DATA_CHECK_INTERVAL,
-    REGEN_MAX_DATA_CHECK_ATTEMPTS,
-    REGEN_WRITE_DELAY
-)
+from core import constants
 
 class RegenDevice:
     """Interface pour l'appareil de régénération de résistance, permettant de contrôler et lire la température"""
     
-    def __init__(self, port=None, baud_rate=REGEN_DEFAULT_BAUD_RATE, timeout=REGEN_DEFAULT_TIMEOUT):
+    def __init__(self, port=None, baud_rate=constants.REGEN_DEFAULT_BAUD_RATE, timeout=constants.REGEN_DEFAULT_TIMEOUT):
         """
         Initialise l'appareil de régénération
 
@@ -75,7 +68,7 @@ class RegenDevice:
             
             # Envoyer la commande complète
             self.device.write(f"{command}{address}".encode())
-            time.sleep(REGEN_COMMAND_DELAY)  # Délai pour donner le temps au périphérique de répondre
+            time.sleep(constants.REGEN_COMMAND_DELAY)  # Délai pour donner le temps au périphérique de répondre
 
             # Vérifier encore une fois si le port est ouvert avant la lecture
             if not self.device.is_open:
@@ -85,8 +78,8 @@ class RegenDevice:
 
             # Attendre que les données soient disponibles avec plusieurs tentatives
             attempts = 0
-            while self.device.in_waiting == 0 and attempts < REGEN_MAX_DATA_CHECK_ATTEMPTS:
-                time.sleep(REGEN_DATA_CHECK_INTERVAL)
+            while self.device.in_waiting == 0 and attempts < constants.REGEN_MAX_DATA_CHECK_ATTEMPTS:
+                time.sleep(constants.REGEN_DATA_CHECK_INTERVAL)
                 attempts += 1
                 
             if self.device.in_waiting == 0:
@@ -138,7 +131,7 @@ class RegenDevice:
             self.device.write(command_str.encode())
 
             # Attendre un court instant pour s'assurer que la commande est traitée
-            time.sleep(REGEN_WRITE_DELAY)
+            time.sleep(constants.REGEN_WRITE_DELAY)
             
             # Vérifier encore une fois si le port est ouvert
             if not self.device.is_open:

@@ -17,7 +17,7 @@ from devices.regen_device import RegenDevice
 from core.measurement_manager import MeasurementManager
 from data_handlers.excel_handler import ExcelHandler
 from ui.plot_manager import PlotManager
-from core.constants import EXCEL_BASE_DIR, AUTOSAVE_INTERVAL
+from core import constants
 
 def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_rate=None,
          measure_conductance=1, measure_co2=1, measure_regen=1, auto_save=True, save_data=True,
@@ -255,7 +255,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         print(f"Using custom save location: {save_location}")
         data_handler = ExcelHandler(mode="manual", base_dir=save_location)
     else:
-        print(f"Using default save location: {EXCEL_BASE_DIR}")
+        print(f"Using default save location: {constants.EXCEL_BASE_DIR}")
         data_handler = ExcelHandler(mode="manual")
     
     # Initialize plots
@@ -269,7 +269,6 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
     
     # Variables pour la sauvegarde de secours
     last_backup_time = time.time()
-    backup_interval = AUTOSAVE_INTERVAL if auto_save else float('inf')  # Désactive si auto_save est False
     emergency_mode = False  # Indique si on est en mode d'urgence
     device_error_count = {
         'arduino': 0,
@@ -1784,7 +1783,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                                 measurements.values_temp,
                                 measurements.timestamps_humidity,
                                 measurements.values_humidity,
-                                measurements.regeneration_timestamps
+                                measurements.get_regeneration_timestamps_for_graph('co2_temp_humidity')
                             )
                         except ValueError:
                             print(f"Error parsing CO2/temp/humidity data: {line}")
@@ -2120,7 +2119,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                     measurements.timestamps_res_temp,
                     measurements.temperatures,
                     measurements.Tcons_values,
-                    measurements.regeneration_timestamps
+                    measurements.get_regeneration_timestamps_for_graph('res_temp')
                 )
         
         # Handle regeneration protocol
@@ -2269,6 +2268,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
             emergency_mode = False
         
         # Adapter l'intervalle de sauvegarde au mode d'urgence
+        backup_interval = constants.AUTOSAVE_INTERVAL if auto_save else float('inf')  # Recalculer à chaque fois
         effective_interval = backup_interval / 2 if emergency_mode else backup_interval
         
         # Variables pour suivre la dernière sauvegarde d'urgence

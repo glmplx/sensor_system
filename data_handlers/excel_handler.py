@@ -13,7 +13,7 @@ from openpyxl.chart.axis import DateAxis
 
 # Ajout du répertoire parent au chemin d'importation pour résoudre les dépendances
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from core.constants import EXCEL_BASE_DIR
+from core import constants
 
 class ExcelHandler:
     """Gère les opérations de fichiers Excel pour le stockage, l'organisation et la visualisation des données de mesure"""
@@ -24,10 +24,10 @@ class ExcelHandler:
 
         Args:
             mode: Mode de fonctionnement, soit "manual" soit "auto"
-            base_dir: Répertoire de base pour les fichiers Excel (par défaut: EXCEL_BASE_DIR)
+            base_dir: Répertoire de base pour les fichiers Excel (par défaut: constants.EXCEL_BASE_DIR)
         """
         self.mode = mode
-        self.base_dir = base_dir if base_dir else EXCEL_BASE_DIR
+        self.base_dir = base_dir if base_dir else constants.EXCEL_BASE_DIR
         self.test_folder_path = None
         self.conductance_file = None
         self.co2_temp_humidity_file = None
