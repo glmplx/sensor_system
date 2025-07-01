@@ -145,10 +145,13 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         measure_auto = not measure_auto
         
         if measure_auto:
-            # Initialiser les fichiers si nécessaire
-            data_handler.initialize_file("conductance")
-            data_handler.initialize_file("co2_temp_humidity")
-            data_handler.initialize_file("temp_res")
+            # Initialiser les fichiers si nécessaire et si l'enregistrement est activé
+            if save_data:
+                data_handler.initialize_file("conductance")
+                data_handler.initialize_file("co2_temp_humidity")
+                data_handler.initialize_file("temp_res")
+            else:
+                print("Enregistrement désactivé - les fichiers ne seront pas créés")
             
             # Démarrer les mesures
             keithley.turn_output_on()
@@ -367,9 +370,12 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                 data_handler.temp_res_file is not None
             )
             
-            if measure_auto:
+            if measure_auto and save_data:
                 print("Sauvegarde des données...")
                 saved = data_handler.save_all_data(measurements)
+            elif measure_auto and not save_data:
+                print("Enregistrement désactivé - les données ne seront pas sauvegardées")
+                saved = False
             else:
                 saved = False
                 if files_initialized:
@@ -614,7 +620,9 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
             # Gérer le protocole de régénération si actif
             if measurements.regeneration_in_progress:
                 regeneration_status = measurements.manage_regeneration_protocol()
-                plot_manager.update_regeneration_status(regeneration_status, measurements.regeneration_results)
+                # Utiliser les résultats du statut si disponibles, sinon ceux stockés dans measurements
+                results = regeneration_status.get('results') or measurements.regeneration_results
+                plot_manager.update_regeneration_status(regeneration_status, results)
         
         # Update UI - délai court pour une meilleure réactivité
         # Utiliser un délai court pour la réactivité de l'UI mais donner une chance au ramasse-miettes Python de libérer la mémoire

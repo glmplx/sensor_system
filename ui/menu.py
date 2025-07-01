@@ -163,6 +163,30 @@ class MenuUI:
             'regen_port_index': regen_port_index
         }
     
+    def toggle_save_options(self, *args):
+        """Afficher ou masquer les options de sauvegarde en fonction de l'état de save_data_var"""
+        if self.save_data_var.get():
+            # Si enregistrement activé, montrer les options
+            self.auto_save_check.config(state=tk.NORMAL)
+            self.custom_location_check.config(state=tk.NORMAL)
+            # Appeler toggle_location_selector pour mettre à jour l'état des champs de localisation
+            self.toggle_location_selector()
+        else:
+            # Si enregistrement désactivé, désactiver et masquer les options
+            self.auto_save_check.config(state=tk.DISABLED)
+            self.custom_location_check.config(state=tk.DISABLED)
+            self.location_entry.grid_remove()
+            self.browse_button.grid_remove()
+
+    def toggle_location_selector(self, *args):
+        """Afficher ou masquer le champ de saisie de l'emplacement de sauvegarde"""
+        if self.save_data_var.get() and self.custom_save_location_var.get():
+            self.location_entry.grid(row=3, column=0, columnspan=1, sticky='ew', padx=10, pady=2)
+            self.browse_button.grid(row=3, column=1, sticky='w', padx=0, pady=2)
+        else:
+            self.location_entry.grid_remove()
+            self.browse_button.grid_remove()
+    
     def setup_ui(self):
         """Configurer les éléments de l'interface utilisateur"""
         # Initialiser avec le scan des ports
@@ -243,24 +267,14 @@ class MenuUI:
         options_frame.grid(row=6, column=0, columnspan=2, padx=10, pady=10, sticky='ew')
 
         # Options de sauvegarde
-        autosave_check = tk.Checkbutton(options_frame, text="Activer les sauvegardes automatiques", variable=self.auto_save_var)
-        autosave_check.grid(row=0, column=0, sticky='w', padx=10, pady=5)
+        self.savedata_check = tk.Checkbutton(options_frame, text="Enregistrer les données des mesures", variable=self.save_data_var, command=self.toggle_save_options)
+        self.savedata_check.grid(row=0, column=0, sticky='w', padx=10, pady=5)
 
-        savedata_check = tk.Checkbutton(options_frame, text="Enregistrer les données des mesures", variable=self.save_data_var)
-        savedata_check.grid(row=1, column=0, sticky='w', padx=10, pady=5)
+        self.auto_save_check = tk.Checkbutton(options_frame, text="Activer les sauvegardes automatiques", variable=self.auto_save_var)
+        self.auto_save_check.grid(row=1, column=0, sticky='w', padx=10, pady=5)
 
         # Variable pour stocker le chemin de sauvegarde personnalisé
         self.save_location_path = tk.StringVar(value=EXCEL_BASE_DIR)
-
-        # Fonction pour afficher/masquer le sélecteur d'emplacement
-        def toggle_location_selector(*args):
-            """Afficher ou masquer le champ de saisie de l'emplacement de sauvegarde"""
-            if self.custom_save_location_var.get():
-                location_entry.grid(row=3, column=0, columnspan=1, sticky='ew', padx=10, pady=2)
-                browse_button.grid(row=3, column=1, sticky='w', padx=0, pady=2)
-            else:
-                location_entry.grid_remove()
-                browse_button.grid_remove()
 
         # Fonction pour ouvrir le sélecteur de dossier
         def browse_directory():
@@ -269,18 +283,21 @@ class MenuUI:
             if directory:  # Si l'utilisateur a sélectionné un dossier
                 self.save_location_path.set(directory)
 
-        custom_location_check = tk.Checkbutton(options_frame, text="Choisir l'emplacement d'enregistrement",
-                                              variable=self.custom_save_location_var, command=toggle_location_selector)
-        custom_location_check.grid(row=2, column=0, sticky='w', padx=10, pady=5)
+        self.custom_location_check = tk.Checkbutton(options_frame, text="Choisir l'emplacement d'enregistrement",
+                          variable=self.custom_save_location_var, command=lambda: self.toggle_location_selector())
+        self.custom_location_check.grid(row=2, column=0, sticky='w', padx=10, pady=5)
 
         # Champ de texte pour afficher le chemin d'enregistrement
-        location_entry = tk.Entry(options_frame, textvariable=self.save_location_path, width=30)
+        self.location_entry = tk.Entry(options_frame, textvariable=self.save_location_path, width=30)
 
         # Bouton pour parcourir les dossiers
-        browse_button = tk.Button(options_frame, text="Parcourir...", command=browse_directory)
+        self.browse_button = tk.Button(options_frame, text="Parcourir...", command=browse_directory)
+
+        # Configurer l'état initial des options de sauvegarde
+        self.toggle_save_options()
 
         # Initialiser l'état de visibilité du sélecteur en fonction de l'état de la case à cocher
-        toggle_location_selector()
+        self.toggle_location_selector()
         
         # Button frame to hold refresh, launch and quit buttons
         button_frame = tk.Frame(self.window)

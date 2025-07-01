@@ -127,8 +127,8 @@ class PlotManager:
         except Exception as e:
             print(f"Note: Could not set window size: {e}")
         
-        # Adjust margins
-        plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.15)
+        # Adjust margins - décaler largement à gauche pour laisser de la place aux contrôles R0, hauteur réduite pour boutons
+        plt.subplots_adjust(left=0.075, right=0.80, top=0.85, bottom=0.20)
         
         # Enable interactive mode
         plt.ion()
@@ -1113,18 +1113,19 @@ class PlotManager:
             n_active = len(active_axes)
             
             # Recalculer les positions de chaque axe visible (pour tout nombre de panneaux)
-            height_per_panel = 0.75 / n_active
-            bottom_margin = 0.15  # Marge inférieure
+            available_height = 0.65  # Réduction de la hauteur totale disponible
+            height_per_panel = available_height / n_active
+            bottom_margin = 0.20  # Marge inférieure augmentée
             
             for i, ax in enumerate(active_axes):
                 # Position y (de bas en haut)
                 bottom = bottom_margin + (n_active - i - 1) * height_per_panel
-                # Définir la nouvelle position [left, bottom, width, height]
-                ax.set_position([0.1, bottom, 0.8, height_per_panel * 0.95])
+                # Définir la nouvelle position [left, bottom, width, height] - décalé à gauche avec hauteur réduite
+                ax.set_position([0.075, bottom, 0.75, height_per_panel * 0.90])
                 
                 # Si c'est un axe CO2, ajuster aussi l'axe droit
                 if ax == self.axes.get('co2') and 'co2_right' in self.axes:
-                    self.axes['co2_right'].set_position([0.1, bottom, 0.8, height_per_panel * 0.95])
+                    self.axes['co2_right'].set_position([0.075, bottom, 0.75    , height_per_panel * 0.90])
         
         # Cacher les boutons pour les panneaux masqués et les fonctionnalités non disponibles
         for button_name, button in self.buttons.items():

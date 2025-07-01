@@ -346,20 +346,22 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         previous_state = measure_conductance_active
         measure_conductance_active = not measure_conductance_active
         
-        # Initialiser le fichier si nécessaire
-        if measure_conductance_active and not conductance_file_initialized:
+        # Initialiser le fichier si nécessaire et si l'enregistrement est activé
+        if measure_conductance_active and not conductance_file_initialized and save_data:
             data_handler.initialize_file("conductance")
             conductance_file_initialized = True
         
         # Si on arrête la mesure (passage de True à False)
         if previous_state and not measure_conductance_active:
-            # Sauvegarder les données courantes
-            if measurements.timeList and len(measurements.timeList) > 0:
+            # Sauvegarder les données courantes si l'enregistrement est activé
+            if save_data and measurements.timeList and len(measurements.timeList) > 0:
                 data_handler.save_conductance_data(
                     measurements.timeList,
                     measurements.conductanceList,
                     measurements.resistanceList,
                 )
+            elif not save_data:
+                print("Enregistrement désactivé - les données ne seront pas sauvegardées")
         
         # Si on reprend après pause - NE PAS SAUVEGARDER ici
         if not previous_state and measure_conductance_active and measurements.pause_time_conductance is not None:
@@ -382,17 +384,17 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         previous_state = measure_co2_temp_humidity_active
         measure_co2_temp_humidity_active = not measure_co2_temp_humidity_active
         
-        # Initialiser le fichier si nécessaire
-        if measure_co2_temp_humidity_active and not co2_temp_humidity_file_initialized:
+        # Initialiser le fichier si nécessaire et si l'enregistrement est activé
+        if measure_co2_temp_humidity_active and not co2_temp_humidity_file_initialized and save_data:
             data_handler.initialize_file("co2_temp_humidity")
             co2_temp_humidity_file_initialized = True
         
         # Si on arrête la mesure (passage de True à False)
         if previous_state and not measure_co2_temp_humidity_active:
-            # Sauvegarder les données courantes
-            if (measurements.timestamps_co2 and len(measurements.timestamps_co2) > 0) or \
+            # Sauvegarder les données courantes si l'enregistrement est activé
+            if save_data and ((measurements.timestamps_co2 and len(measurements.timestamps_co2) > 0) or \
             (measurements.timestamps_temp and len(measurements.timestamps_temp) > 0) or \
-            (measurements.timestamps_humidity and len(measurements.timestamps_humidity) > 0):
+            (measurements.timestamps_humidity and len(measurements.timestamps_humidity) > 0)):
                 data_handler.save_co2_temp_humidity_data(
                     measurements.timestamps_co2,
                     measurements.values_co2,
@@ -401,6 +403,8 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                     measurements.timestamps_humidity,
                     measurements.values_humidity,
                 )
+            elif not save_data:
+                print("Enregistrement désactivé - les données ne seront pas sauvegardées")
         
         # Si on reprend après pause - NE PAS SAUVEGARDER ici
         if not previous_state and measure_co2_temp_humidity_active and measurements.pause_time_co2_temp_humidity is not None:
@@ -423,20 +427,22 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         previous_state = measure_res_temp_active
         measure_res_temp_active = not measure_res_temp_active
         
-        # Initialiser le fichier si nécessaire
-        if measure_res_temp_active and not temp_res_file_initialized:
+        # Initialiser le fichier si nécessaire et si l'enregistrement est activé
+        if measure_res_temp_active and not temp_res_file_initialized and save_data:
             data_handler.initialize_file("temp_res")
             temp_res_file_initialized = True
         
         # Si on arrête la mesure (passage de True à False)
         if previous_state and not measure_res_temp_active:
-            # Sauvegarder les données courantes
-            if measurements.timestamps_res_temp and len(measurements.timestamps_res_temp) > 0:
+            # Sauvegarder les données courantes si l'enregistrement est activé
+            if save_data and measurements.timestamps_res_temp and len(measurements.timestamps_res_temp) > 0:
                 data_handler.save_temp_res_data(
                     measurements.timestamps_res_temp,
                     measurements.temperatures,
                     measurements.Tcons_values,
                 )
+            elif not save_data:
+                print("Enregistrement désactivé - les données ne seront pas sauvegardées")
         
         # Si on reprend après pause - NE PAS SAUVEGARDER ici
         if not previous_state and measure_res_temp_active and measurements.pause_time_res_temp is not None:
@@ -455,13 +461,15 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
     
     def raz_conductance(event):
         """Gère la réinitialisation des données de conductance"""
-        # Sauvegarder les données courantes avant RAZ
-        if measurements.timeList and len(measurements.timeList) > 0:
+        # Sauvegarder les données courantes avant RAZ si l'enregistrement est activé
+        if save_data and measurements.timeList and len(measurements.timeList) > 0:
             data_handler.save_conductance_data(
                 measurements.timeList,
                 measurements.conductanceList,
                 measurements.resistanceList,
             )
+        elif not save_data and measurements.timeList and len(measurements.timeList) > 0:
+            print("Enregistrement désactivé - les données ne seront pas sauvegardées avant RAZ")
         
         # Préparer les données pour l'essai cumulé sans créer de nouvelle feuille
         if measurements.timeList and len(measurements.timeList) > 0:
@@ -489,10 +497,10 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
 
     def raz_co2_temp_humidity(event):
         """Gère la réinitialisation des données CO2/température/humidité"""
-        # Sauvegarder les données courantes avant RAZ
-        if (measurements.timestamps_co2 and len(measurements.timestamps_co2) > 0) or \
+        # Sauvegarder les données courantes avant RAZ si l'enregistrement est activé
+        if save_data and ((measurements.timestamps_co2 and len(measurements.timestamps_co2) > 0) or \
         (measurements.timestamps_temp and len(measurements.timestamps_temp) > 0) or \
-        (measurements.timestamps_humidity and len(measurements.timestamps_humidity) > 0):
+        (measurements.timestamps_humidity and len(measurements.timestamps_humidity) > 0)):
             data_handler.save_co2_temp_humidity_data(
                 measurements.timestamps_co2,
                 measurements.values_co2,
@@ -501,6 +509,10 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                 measurements.timestamps_humidity,
                 measurements.values_humidity,
             )
+        elif not save_data and ((measurements.timestamps_co2 and len(measurements.timestamps_co2) > 0) or \
+        (measurements.timestamps_temp and len(measurements.timestamps_temp) > 0) or \
+        (measurements.timestamps_humidity and len(measurements.timestamps_humidity) > 0)):
+            print("Enregistrement désactivé - les données ne seront pas sauvegardées avant RAZ")
         
         # Préparer les données pour l'essai cumulé
         if (measurements.timestamps_co2 and len(measurements.timestamps_co2) > 0) or \
@@ -521,13 +533,15 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
 
     def raz_res_temp(event):
         """Gère la réinitialisation des données de température et de résistance"""
-        # Sauvegarder les données courantes avant RAZ
-        if measurements.timestamps_res_temp and len(measurements.timestamps_res_temp) > 0:
+        # Sauvegarder les données courantes avant RAZ si l'enregistrement est activé
+        if save_data and measurements.timestamps_res_temp and len(measurements.timestamps_res_temp) > 0:
             data_handler.save_temp_res_data(
                 measurements.timestamps_res_temp,
                 measurements.temperatures,
                 measurements.Tcons_values,
             )
+        elif not save_data and measurements.timestamps_res_temp and len(measurements.timestamps_res_temp) > 0:
+            print("Enregistrement désactivé - les données ne seront pas sauvegardées avant RAZ")
         
         # Préparer les données pour l'essai cumulé
         if measurements.timestamps_res_temp and len(measurements.timestamps_res_temp) > 0:
@@ -930,8 +944,13 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         """
         nonlocal last_backup_status, emergency_mode
 
-        # Ajoutez cette vérification au début de la fonction
+        # Vérifications préliminaires
         if not auto_save and "automatique" in reason:
+            return False
+        
+        # Si l'enregistrement est désactivé, ne pas faire de sauvegarde
+        if not save_data:
+            print(f"Enregistrement désactivé - pas de sauvegarde effectuée ({reason})")
             return False
         
         try:
@@ -1802,8 +1821,8 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                     if measure_conductance_active:
                         print("Mise en pause automatique de la mesure de conductance")
                         
-                        # Sauvegarder immédiatement les données de conductance
-                        if measurements.timeList and len(measurements.timeList) > 0:
+                        # Sauvegarder immédiatement les données de conductance si l'enregistrement est activé
+                        if save_data and measurements.timeList and len(measurements.timeList) > 0:
                             print("Sauvegarde immédiate des données de conductance suite à la déconnexion...")
                             try:
                                 # S'assurer que le fichier est initialisé
@@ -1820,6 +1839,8 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
                                 print(f"✓ {len(measurements.timeList)} points de conductance sauvegardés")
                             except Exception as e:
                                 print(f"Erreur lors de la sauvegarde des données de conductance: {e}")
+                        elif not save_data and measurements.timeList and len(measurements.timeList) > 0:
+                            print("Enregistrement désactivé - les données ne seront pas sauvegardées")
                         
                         measure_conductance_active = False
                         # Mettre à jour l'interface
@@ -2106,7 +2127,9 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         if measurements.regeneration_in_progress:
             try:
                 regeneration_status = measurements.manage_regeneration_protocol()
-                plot_manager.update_regeneration_status(regeneration_status, measurements.regeneration_results)
+                # Utiliser les résultats du statut si disponibles, sinon ceux stockés dans measurements
+                results = regeneration_status.get('results') or measurements.regeneration_results
+                plot_manager.update_regeneration_status(regeneration_status, results)
                 
                 # Force completion de protocole s'il atteint 100%
                 if regeneration_status.get('progress', 0) >= 100:

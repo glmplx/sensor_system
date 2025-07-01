@@ -419,7 +419,7 @@ class ExcelHandler:
         # Définir les données à sauvegarder
         data = {}
         
-        # Pour AutoSave, on veut toujours continuer après le dernier point enregistré
+        # Pour AutoSave, on veut seulement ajouter les nouveaux points non encore enregistrés
         if sheet_name == "AutoSave":
             try:
                 wb = load_workbook(self.conductance_file)
@@ -429,9 +429,19 @@ class ExcelHandler:
                     if last_row > 1:  # Si la feuille contient déjà des données
                         last_time = ws.cell(row=last_row, column=2).value  # Colonne 2 = Temps (s)
                         if last_time is not None:
-                            # Ajuster les timestamps pour continuer après le dernier point
-                            data['Minutes'] = [(last_time + t) / 60.0 for t in timeList]
-                            data['Temps (s)'] = [last_time + t for t in timeList]
+                            # Filtrer pour ne prendre que les nouveaux points après le dernier temps enregistré
+                            new_indices = [i for i, t in enumerate(timeList) if t > last_time]
+                            if new_indices:
+                                new_timeList = [timeList[i] for i in new_indices]
+                                new_conductanceList = [conductanceList[i] for i in new_indices]
+                                new_resistanceList = [resistanceList[i] for i in new_indices]
+                                data['Minutes'] = [t / 60.0 for t in new_timeList]
+                                data['Temps (s)'] = new_timeList
+                                conductanceList = new_conductanceList
+                                resistanceList = new_resistanceList
+                            else:
+                                # Aucun nouveau point à sauvegarder
+                                return
                         else:
                             data['Minutes'] = [t / 60.0 for t in timeList]
                             data['Temps (s)'] = timeList
@@ -573,7 +583,7 @@ class ExcelHandler:
         # Définir les données à sauvegarder
         data = {}
         
-        # Pour AutoSave, on veut toujours continuer après le dernier point enregistré
+        # Pour AutoSave, on veut seulement ajouter les nouveaux points non encore enregistrés
         if sheet_name == "AutoSave":
             try:
                 wb = load_workbook(self.co2_temp_humidity_file)
@@ -583,9 +593,25 @@ class ExcelHandler:
                     if last_row > 1:  # Si la feuille contient déjà des données
                         last_time = ws.cell(row=last_row, column=2).value  # Colonne 2 = Temps (s)
                         if last_time is not None:
-                            # Ajuster les timestamps pour continuer après le dernier point
-                            data['Minutes'] = [(last_time + t) / 60.0 for t in timestamps]
-                            data['Temps (s)'] = [last_time + t for t in timestamps]
+                            # Filtrer pour ne prendre que les nouveaux points après le dernier temps enregistré
+                            new_indices = [i for i, t in enumerate(timestamps) if t > last_time]
+                            if new_indices:
+                                new_timestamps = [timestamps[i] for i in new_indices]
+                                new_co2_values = [co2_values[i] for i in new_indices] if co2_values else []
+                                new_temp_values = [temp_values[i] for i in new_indices] if temp_values else []
+                                new_humidity_values = [humidity_values[i] for i in new_indices] if humidity_values else []
+                                data['Minutes'] = [t / 60.0 for t in new_timestamps]
+                                data['Temps (s)'] = new_timestamps
+                                timestamps = new_timestamps
+                                co2_timestamps = [co2_timestamps[i] for i in new_indices] if co2_timestamps else []
+                                temp_timestamps = [temp_timestamps[i] for i in new_indices] if temp_timestamps else []
+                                humidity_timestamps = [humidity_timestamps[i] for i in new_indices] if humidity_timestamps else []
+                                co2_values = new_co2_values
+                                temp_values = new_temp_values
+                                humidity_values = new_humidity_values
+                            else:
+                                # Aucun nouveau point à sauvegarder
+                                return
                         else:
                             data['Minutes'] = [t / 60.0 for t in timestamps]
                             data['Temps (s)'] = timestamps
@@ -748,7 +774,7 @@ class ExcelHandler:
         # Définir les données à sauvegarder
         data = {}
 
-        # Pour AutoSave, on veut toujours continuer après le dernier point enregistré
+        # Pour AutoSave, on veut seulement ajouter les nouveaux points non encore enregistrés
         if sheet_name == "AutoSave":
             try:
                 wb = load_workbook(self.temp_res_file)
@@ -758,9 +784,20 @@ class ExcelHandler:
                     if last_row > 1:
                         last_time = ws.cell(row=last_row, column=2).value
                         if last_time is not None:
-                            # Ajuster les timestamps pour continuer après le dernier point
-                            data['Minutes'] = [(last_time + t) / 60.0 for t in timestamps]
-                            data['Temps (s)'] = [last_time + t for t in timestamps]
+                            # Filtrer pour ne prendre que les nouveaux points après le dernier temps enregistré
+                            new_indices = [i for i, t in enumerate(timestamps) if t > last_time]
+                            if new_indices:
+                                new_timestamps = [timestamps[i] for i in new_indices]
+                                new_temperatures = [temperatures[i] for i in new_indices] if temperatures else []
+                                new_tcons_values = [tcons_values[i] for i in new_indices] if tcons_values else []
+                                data['Minutes'] = [t / 60.0 for t in new_timestamps]
+                                data['Temps (s)'] = new_timestamps
+                                timestamps = new_timestamps
+                                temperatures = new_temperatures
+                                tcons_values = new_tcons_values
+                            else:
+                                # Aucun nouveau point à sauvegarder
+                                return
                         else:
                             data['Minutes'] = [t / 60.0 for t in timestamps]
                             data['Temps (s)'] = timestamps

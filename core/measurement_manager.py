@@ -1361,8 +1361,10 @@ class MeasurementManager:
             # Calculer la masse de carbone en µg: mc = deltaC * volume / 24.5 * 12
             carbon_mass = delta_c * CELL_VOLUME / 24.5 * 12
             
-            print(f"Delta C: {delta_c:.2f} ppm")
-            print(f"Masse de carbone: {carbon_mass:.2f} µg")
+            print(f"CALCUL DELTA C - Valeur initiale: {self.co2_stable_value:.2f} ppm, Valeur finale: {self.co2_restabilization_reference:.2f} ppm")
+            print(f"RESULTAT - Delta C: {delta_c:.2f} ppm, Masse de carbone: {carbon_mass:.2f} µg")
+        else:
+            print(f"ERREUR CALCUL DELTA C - co2_stable_value: {self.co2_stable_value}, co2_restabilization_reference: {self.co2_restabilization_reference}")
         
         # Le temps de percolation est simplement le moment où l'augmentation commence
         percolation_time = 0
@@ -2074,7 +2076,8 @@ class MeasurementManager:
                         'active': False,
                         'step': 4,
                         'message': "Régénération terminée avec succès",
-                        'progress': 100
+                        'progress': 100,
+                        'results': self.regeneration_results
                     }
                 else:
                     # Attendre la restabilisation après la fin du chauffage
@@ -2096,7 +2099,8 @@ class MeasurementManager:
                     'active': False,
                     'step': 4,
                     'message': "Régénération terminée avec succès",
-                    'progress': 100
+                    'progress': 100,
+                    'results': self.regeneration_results
                 }
             else:
                 restab_time = current_time - self.co2_restabilization_start_time if self.co2_restabilization_start_time else 0
