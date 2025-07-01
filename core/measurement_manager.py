@@ -7,7 +7,7 @@ import numpy as np
 import serial
 from serial.serialutil import SerialException
 import pyvisa
-from core import constants
+from core.config import config
 
 class MeasurementManager:
     """Gère toutes les opérations de mesure et implémente la logique de détection des capteurs"""
@@ -747,7 +747,7 @@ class MeasurementManager:
         conductance_window = self.conductanceList[-10:]
         slope = np.polyfit(time_window, conductance_window, 1)[0]  # slope in S/s
         
-        if constants.INCREASE_SLOPE_MIN <= slope <= constants.INCREASE_SLOPE_MAX:
+        if config.INCREASE_SLOPE_MIN <= slope <= config.INCREASE_SLOPE_MAX:
             self.increase_detected = True
             self.max_slope_value = slope
             self.max_slope_time = self.timeList[-1]
@@ -779,9 +779,9 @@ class MeasurementManager:
         end_idx = None
         
         for i, t in enumerate(self.timeList):
-            if t >= current_time - constants.SLIDING_WINDOW/2 and start_idx is None:
+            if t >= current_time - config.SLIDING_WINDOW/2 and start_idx is None:
                 start_idx = i
-            if t <= current_time + constants.SLIDING_WINDOW/2:
+            if t <= current_time + config.SLIDING_WINDOW/2:
                 end_idx = i
         
         if end_idx >= len(self.timeList):
@@ -800,8 +800,8 @@ class MeasurementManager:
                     self.max_slope_time = current_time
                 
                 # Check if stabilized
-                if (current_time - self.max_slope_time >= constants.STABILITY_DURATION and 
-                    abs(current_slope) < constants.INCREASE_SLOPE_MIN/2):
+                if (current_time - self.max_slope_time >= config.STABILITY_DURATION and 
+                    abs(current_slope) < config.INCREASE_SLOPE_MIN/2):
                     self.stabilized = True
                     self.stabilization_time = current_time
                     print(f"Time {current_time/60:.1f} min: Stabilization detected! Last slope = {current_slope:.4f} µS/s")
@@ -858,7 +858,7 @@ class MeasurementManager:
             
         # Vérifie si la conductance actuelle est inférieure à 5 µS
         current_conductance = self.conductanceList[-1]
-        if current_conductance < constants.CONDUCTANCE_DECREASE_THRESHOLD:
+        if current_conductance < config.CONDUCTANCE_DECREASE_THRESHOLD:
             # Marquer la détection de la décroissance (nouveau)
             if not self.conductance_decrease_detected:
                 self.conductance_decrease_detected = True
@@ -892,7 +892,7 @@ class MeasurementManager:
         slope = np.polyfit(time_window, conductance_window, 1)[0]  # pente en S/s
 
         # Vérifie si la pente indique une augmentation significative
-        if constants.INCREASE_SLOPE_MIN <= slope <= constants.INCREASE_SLOPE_MAX:
+        if config.INCREASE_SLOPE_MIN <= slope <= config.INCREASE_SLOPE_MAX:
             # Actualise l'indicateur de début d'augmentation
             self.increase_time = self.timeList[-1]
             self.increase_detected = True
@@ -926,7 +926,7 @@ class MeasurementManager:
         
         # Vérifier si la conductance s'est stabilisée après la chute
         # La pente est proche de zéro et le temps écoulé depuis la décroissance est significatif
-        if abs(current_slope) < constants.INCREASE_SLOPE_MIN/3 and current_time - self.conductance_decrease_time >= constants.STABILITY_DURATION:
+        if abs(current_slope) < config.INCREASE_SLOPE_MIN/3 and current_time - self.conductance_decrease_time >= config.STABILITY_DURATION:
             self.post_regen_stability_detected = True
             self.post_regen_stability_time = current_time
             print(f"Temps {current_time/60:.1f} min: Restabilisation post-régénération détectée! Pente = {current_slope:.4f} µS/s")
@@ -948,11 +948,11 @@ class MeasurementManager:
             # Close valve after stabilization
             self.retract_close_sensor()
             print("Auto: Closing valve")
-            time.sleep(constants.VALVE_DELAY)
+            time.sleep(config.VALVE_DELAY)
             
             # Read and update R0
             R0 = self.read_R0()
-            if R0 is not None and R0 < constants.R0_THRESHOLD:
+            if R0 is not None and R0 < config.R0_THRESHOLD:
                 # Actualiser R0 en l'écrivant dans les paramètres
                 self.set_R0(str(R0))
                 print(f"Auto: R0 updated to {R0}")
@@ -974,11 +974,11 @@ class MeasurementManager:
                             current_time = time.time()
                             
                             # Vérifier si le CO2 est stable
-                            if abs(current_co2 - co2_reference) <= constants.CO2_STABILITY_THRESHOLD:
+                            if abs(current_co2 - co2_reference) <= config.CO2_STABILITY_THRESHOLD:
                                 # Stable, vérifier la durée
-                                if current_time - co2_stable_start_time >= CO2_constants.STABILITY_DURATION:
+                                if current_time - co2_stable_start_time >= config.STABILITY_DURATION:
                                     co2_stable = True
-                                    print(f"Auto: CO2 stable pendant {CO2_constants.STABILITY_DURATION} secondes, lancement chauffage")
+                                    print(f"Auto: CO2 stable pendant {config.STABILITY_DURATION} secondes, lancement chauffage")
                             else:
                                 # Non stable, réinitialiser la référence
                                 print(f"Auto: CO2 instable, nouvelle référence: {current_co2} ppm")
@@ -995,9 +995,9 @@ class MeasurementManager:
                 
                 # Une fois la stabilité CO2 vérifiée, lancer la régénération
                 print("Auto: Démarrage de la régénération - chauffage à haute température")
-                success = self.set_Tcons(str(constants.REGENERATION_TEMP))
+                success = self.set_Tcons(str(config.REGENERATION_TEMP))
                 if not success:
-                    print(f"Auto: Erreur lors de la définition de Tcons à {constants.REGENERATION_TEMP}°C")
+                    print(f"Auto: Erreur lors de la définition de Tcons à {config.REGENERATION_TEMP}°C")
                 
                 # Ajouter une sécurité pour le temps de régénération
                 regeneration_start_time = time.time()
@@ -1024,9 +1024,9 @@ class MeasurementManager:
                     print("Auto: Temps maximum de régénération atteint (3 min) - Arrêt forcé")
                 
                 # Dans tous les cas, remettre Tcons à basse température
-                success = self.set_Tcons(str(constants.TCONS_LOW))
+                success = self.set_Tcons(str(config.TCONS_LOW))
                 if not success:
-                    print(f"Auto: Erreur lors de la définition de Tcons à {constants.TCONS_LOW}°C")
+                    print(f"Auto: Erreur lors de la définition de Tcons à {config.TCONS_LOW}°C")
                 
             elif R0 is not None and R0 == 1000:
                 print("Error - R0 not detected")
@@ -1040,18 +1040,18 @@ class MeasurementManager:
             print(f"Auto: Conductance decreased below 1 µS ({self.conductanceList[-1]*1e6:.2f} µS)")
             
             # Set Tcons to low temperature if not already done
-            success = self.set_Tcons(str(constants.TCONS_LOW))
+            success = self.set_Tcons(str(config.TCONS_LOW))
             if not success:
-                print(f"Auto: Erreur lors de la définition de Tcons à {constants.TCONS_LOW}°C")
+                print(f"Auto: Erreur lors de la définition de Tcons à {config.TCONS_LOW}°C")
             
-            time.sleep(constants.STABILITY_DURATION)
+            time.sleep(config.STABILITY_DURATION)
             
             print("Auto: Cycle completed. Ready for next cycle.")
             
             # Open valve
             self.push_open_sensor()
             print("Auto: Opening valve")
-            time.sleep(constants.VALVE_DELAY)
+            time.sleep(config.VALVE_DELAY)
             
             # Reset detection flags
             self.increase_detected = False
@@ -1124,23 +1124,23 @@ class MeasurementManager:
             
         # Set temperature back to low value - méthode renforcée
         # 1. Utiliser d'abord la méthode interne set_Tcons
-        result = self.set_Tcons(str(constants.TCONS_LOW))
+        result = self.set_Tcons(str(config.TCONS_LOW))
         if result:
-            print(f"Paramètre Tcons remis à {constants.TCONS_LOW}°C après annulation via set_Tcons")
+            print(f"Paramètre Tcons remis à {config.TCONS_LOW}°C après annulation via set_Tcons")
         else:
-            print(f"Erreur lors de la remise à {constants.TCONS_LOW}°C après annulation via set_Tcons")
+            print(f"Erreur lors de la remise à {config.TCONS_LOW}°C après annulation via set_Tcons")
         
         # 2. Puis essayer d'écrire directement via le périphérique de régénération
         try:
             if self.regen and hasattr(self.regen, 'device') and self.regen.device:
-                command_str = f"ea{constants.TCONS_LOW}\n"
+                command_str = f"ea{config.TCONS_LOW}\n"
                 self.regen.device.write(command_str.encode())
-                print(f"Paramètre Tcons remis à {constants.TCONS_LOW}°C après annulation via commande brute")
+                print(f"Paramètre Tcons remis à {config.TCONS_LOW}°C après annulation via commande brute")
                 
                 # Force une mise à jour de la mémoire interne
-                self.last_set_Tcons = float(constants.TCONS_LOW)
+                self.last_set_Tcons = float(config.TCONS_LOW)
         except Exception as e:
-            print(f"Erreur lors de l'écriture directe pour remettre Tcons à {constants.TCONS_LOW}°C après annulation: {e}")
+            print(f"Erreur lors de l'écriture directe pour remettre Tcons à {config.TCONS_LOW}°C après annulation: {e}")
         
         # Reset regeneration state
         self.regeneration_in_progress = False
@@ -1209,14 +1209,14 @@ class MeasurementManager:
         print("Protocole complet annulé par l'utilisateur")
         
         # Réinitialiser la température à 0°C par sécurité
-        result = self.set_Tcons(str(constants.TCONS_LOW))
+        result = self.set_Tcons(str(config.TCONS_LOW))
         if result:
-            print(f"Paramètre Tcons remis à {constants.TCONS_LOW}°C après annulation du protocole complet")
+            print(f"Paramètre Tcons remis à {config.TCONS_LOW}°C après annulation du protocole complet")
         else:
-            print(f"Erreur lors de la remise à {constants.TCONS_LOW}°C après annulation du protocole complet")
+            print(f"Erreur lors de la remise à {config.TCONS_LOW}°C après annulation du protocole complet")
         
         # Mettre à jour la dernière valeur définie pour Tcons
-        self.last_set_Tcons = float(constants.TCONS_LOW)
+        self.last_set_Tcons = float(config.TCONS_LOW)
         
         return True
         
@@ -1250,14 +1250,14 @@ class MeasurementManager:
             return False
         
         # Check if the current value is within the stability threshold
-        if abs(latest_co2 - self.co2_stable_value) <= constants.CO2_STABILITY_THRESHOLD:
+        if abs(latest_co2 - self.co2_stable_value) <= config.CO2_STABILITY_THRESHOLD:
             # Still stable, check if we've been stable long enough
             if self.co2_stability_start_time is not None:
                 stable_duration = current_time - self.co2_stability_start_time
                 
-                print(f"DEBUG Stabilisation initiale: Écart CO2 = {abs(latest_co2 - self.co2_stable_value):.2f} ppm, Durée stable = {stable_duration:.1f}/{CO2_constants.STABILITY_DURATION} s")
+                print(f"DEBUG Stabilisation initiale: Écart CO2 = {abs(latest_co2 - self.co2_stable_value):.2f} ppm, Durée stable = {stable_duration:.1f}/{config.STABILITY_DURATION} s")
                 
-                if stable_duration >= CO2_constants.STABILITY_DURATION:
+                if stable_duration >= config.STABILITY_DURATION:
                     # Avant de confirmer la stabilité, lire R0, l'afficher et l'actualiser
                     R0 = self.read_R0()
                     if R0 is not None:
@@ -1281,7 +1281,7 @@ class MeasurementManager:
             # UNIQUEMENT pendant la phase 1, avant la mise en chauffage
             if self.start_time_co2_temp_humidity is not None and self.regeneration_step == 1:
                 self.regeneration_timestamps['co2_stability_started'] = current_time - self.start_time_co2_temp_humidity - self.elapsed_time_co2_temp_humidity
-                print(f"Marqueur de début stabilité CO2 déplacé: {latest_co2} ppm (variation de {variation:.2f} ppm > {constants.CO2_STABILITY_THRESHOLD} ppm)")
+                print(f"Marqueur de début stabilité CO2 déplacé: {latest_co2} ppm (variation de {variation:.2f} ppm > {config.CO2_STABILITY_THRESHOLD} ppm)")
             
             return False
             
@@ -1306,14 +1306,14 @@ class MeasurementManager:
             return False
         
         # Check if the current value is within the stability threshold
-        if abs(latest_co2 - self.co2_restabilization_reference) <= constants.CO2_STABILITY_THRESHOLD:
+        if abs(latest_co2 - self.co2_restabilization_reference) <= config.CO2_STABILITY_THRESHOLD:
             # Still stable, check if we've been stable long enough
             if self.co2_restabilization_start_time is not None:
                 stable_duration = current_time - self.co2_restabilization_start_time
                 
-                print(f"DEBUG Restabilisation: Écart CO2 = {abs(latest_co2 - self.co2_restabilization_reference):.2f} ppm, Durée stable = {stable_duration:.1f}/{CO2_constants.STABILITY_DURATION} s")
+                print(f"DEBUG Restabilisation: Écart CO2 = {abs(latest_co2 - self.co2_restabilization_reference):.2f} ppm, Durée stable = {stable_duration:.1f}/{config.STABILITY_DURATION} s")
                 
-                if stable_duration >= CO2_constants.STABILITY_DURATION:
+                if stable_duration >= config.STABILITY_DURATION:
                     # Stability confirmed
                     self.co2_restabilized = True
                     
@@ -1336,7 +1336,7 @@ class MeasurementManager:
             if self.start_time_co2_temp_humidity is not None:
                 self.regeneration_timestamps['co2_restabilization_start_time'] = current_time - self.start_time_co2_temp_humidity - self.elapsed_time_co2_temp_humidity
                 
-            print(f"Référence restabilisation réinitialisée: {latest_co2} ppm (variation de {variation:.2f} ppm > {constants.CO2_STABILITY_THRESHOLD} ppm)")
+            print(f"Référence restabilisation réinitialisée: {latest_co2} ppm (variation de {variation:.2f} ppm > {config.CO2_STABILITY_THRESHOLD} ppm)")
             return False
             
     def regeneration_complete(self):
@@ -1421,13 +1421,13 @@ class MeasurementManager:
         self.conductance_regen_stop_time = None
         
         # Démarrer la régénération (température à 700°C)
-        success = self.set_Tcons(str(constants.REGENERATION_TEMP))
+        success = self.set_Tcons(str(config.REGENERATION_TEMP))
         if not success:
-            print(f"Erreur lors de la définition de Tcons à {constants.REGENERATION_TEMP}°C")
+            print(f"Erreur lors de la définition de Tcons à {config.REGENERATION_TEMP}°C")
             self.conductance_regen_in_progress = False
             return False
         
-        print(f"Protocole de conductance résistance/température démarré (chauffage à {constants.REGENERATION_TEMP}°C)")
+        print(f"Protocole de conductance résistance/température démarré (chauffage à {config.REGENERATION_TEMP}°C)")
         return True
     
     def cancel_conductance_regen_protocol(self):
@@ -1442,8 +1442,8 @@ class MeasurementManager:
             return False
         
         # Arrêter le chauffage
-        self.set_Tcons(str(constants.TCONS_LOW))
-        print(f"Température remise à {constants.TCONS_LOW}°C")
+        self.set_Tcons(str(config.TCONS_LOW))
+        print(f"Température remise à {config.TCONS_LOW}°C")
         
         # Réinitialiser les variables
         self.conductance_regen_in_progress = False
@@ -1498,10 +1498,10 @@ class MeasurementManager:
                 # La cible est atteinte, arrêter le chauffage
                 self.conductance_regen_target_reached = True
                 self.conductance_regen_stop_time = current_time
-                self.set_Tcons(str(constants.TCONS_LOW))
+                self.set_Tcons(str(config.TCONS_LOW))
                 
                 print(f"Résistance cible atteinte: {current_resistance:.0f} Ω > 1 MΩ")
-                print(f"Chauffage arrêté, température réduite à {constants.TCONS_LOW}°C")
+                print(f"Chauffage arrêté, température réduite à {config.TCONS_LOW}°C")
                 
                 return {
                     'active': True,
@@ -1598,7 +1598,7 @@ class MeasurementManager:
         try:
             # Étape 1: Rétraction du vérin
             if self.full_protocol_step == 1:
-                if current_time - self.full_protocol_start_time > constants.VALVE_DELAY:
+                if current_time - self.full_protocol_start_time > config.VALVE_DELAY:
                     self.full_protocol_step = 2
                     self.full_protocol_substep = 0
                     self.full_protocol_substep_start_time = current_time
@@ -1634,14 +1634,14 @@ class MeasurementManager:
                         
                         # Si nous avons une valeur de référence, vérifier la stabilité
                         if self.co2_stable_value is not None:
-                            if abs(latest_co2 - self.co2_stable_value) <= constants.CO2_STABILITY_THRESHOLD:
+                            if abs(latest_co2 - self.co2_stable_value) <= config.CO2_STABILITY_THRESHOLD:
                                 # Toujours stable, vérifier la durée
                                 elapsed = current_time - self.co2_stability_start_time
-                                stability_progress = min(100, (elapsed / CO2_constants.STABILITY_DURATION) * 100)
+                                stability_progress = min(100, (elapsed / config.STABILITY_DURATION) * 100)
                                 
-                                print(f"CO2 stable depuis {elapsed:.1f}s (seuil: {CO2_constants.STABILITY_DURATION}s)")
+                                print(f"CO2 stable depuis {elapsed:.1f}s (seuil: {config.STABILITY_DURATION}s)")
                                 
-                                if elapsed >= CO2_constants.STABILITY_DURATION:
+                                if elapsed >= config.STABILITY_DURATION:
                                     # CO2 stabilisé, passer à l'étape suivante
                                     self.full_protocol_step = 3
                                     self.full_protocol_substep = 0  # Réinitialiser la sous-étape pour l'étape 3
@@ -1710,20 +1710,20 @@ class MeasurementManager:
                     }
             
             elif self.full_protocol_step == 3:
-                # Étape 3: Augmenter Tcons à haute température (constants.REGENERATION_TEMP = 700°C)
+                # Étape 3: Augmenter Tcons à haute température (config.REGENERATION_TEMP = 700°C)
                 if self.full_protocol_substep == 0:
                     # Démarrer le chauffage
-                    print(f"Démarrage de l'étape 3: Chauffage à {constants.REGENERATION_TEMP}°C")
-                    success = self.set_Tcons(str(constants.REGENERATION_TEMP))
+                    print(f"Démarrage de l'étape 3: Chauffage à {config.REGENERATION_TEMP}°C")
+                    success = self.set_Tcons(str(config.REGENERATION_TEMP))
                     if success:
-                        print(f"Chauffage démarré à {constants.REGENERATION_TEMP}°C")
+                        print(f"Chauffage démarré à {config.REGENERATION_TEMP}°C")
                         self.full_protocol_substep = 1
                         self.full_protocol_substep_start_time = current_time
                     else:
-                        print(f"Erreur lors du démarrage du chauffage à {constants.REGENERATION_TEMP}°C")
+                        print(f"Erreur lors du démarrage du chauffage à {config.REGENERATION_TEMP}°C")
                         # Réessayer encore une fois
                         print("Nouvelle tentative de mise à température...")
-                        success = self.set_Tcons(str(constants.REGENERATION_TEMP))
+                        success = self.set_Tcons(str(config.REGENERATION_TEMP))
                         if success:
                             print("Seconde tentative réussie")
                             self.full_protocol_substep = 1
@@ -1763,7 +1763,7 @@ class MeasurementManager:
                             self.full_protocol_step = 4
                             self.full_protocol_substep = 0
                             self.full_protocol_substep_start_time = current_time
-                            print(f"Sécurité : mise de Tcons à {constants.TCONS_LOW}°C car conductance > 5 µS après 3 minutes")
+                            print(f"Sécurité : mise de Tcons à {config.TCONS_LOW}°C car conductance > 5 µS après 3 minutes")
                     
                     # Calculer la progression basée sur le temps écoulé (max 3 minutes)
                     elapsed = current_time - self.full_protocol_substep_start_time
@@ -1778,20 +1778,20 @@ class MeasurementManager:
                     }
             
             elif self.full_protocol_step == 4:
-                # Étape 4: Mettre Tcons à basse température (constants.TCONS_LOW = 0°C)
+                # Étape 4: Mettre Tcons à basse température (config.TCONS_LOW = 0°C)
                 if self.full_protocol_substep == 0:
                     # Abaisser la température
-                    print(f"Démarrage de l'étape 4: Abaissement de la température à {constants.TCONS_LOW}°C")
-                    success = self.set_Tcons(str(constants.TCONS_LOW))
+                    print(f"Démarrage de l'étape 4: Abaissement de la température à {config.TCONS_LOW}°C")
+                    success = self.set_Tcons(str(config.TCONS_LOW))
                     if success:
-                        print(f"Température abaissée à {constants.TCONS_LOW}°C")
+                        print(f"Température abaissée à {config.TCONS_LOW}°C")
                         self.full_protocol_substep = 1
                         self.full_protocol_substep_start_time = current_time
                     else:
-                        print(f"Erreur lors de l'abaissement de la température à {constants.TCONS_LOW}°C")
+                        print(f"Erreur lors de l'abaissement de la température à {config.TCONS_LOW}°C")
                         # Réessayer encore une fois
                         print("Nouvelle tentative d'abaissement de température...")
-                        success = self.set_Tcons(str(constants.TCONS_LOW))
+                        success = self.set_Tcons(str(config.TCONS_LOW))
                         if success:
                             print("Seconde tentative réussie")
                         else:
@@ -1849,12 +1849,12 @@ class MeasurementManager:
                     if len(self.values_co2) > 0:
                         latest_co2 = self.values_co2[-1]
                         
-                        if abs(latest_co2 - self.co2_restabilization_reference) <= constants.CO2_STABILITY_THRESHOLD:
+                        if abs(latest_co2 - self.co2_restabilization_reference) <= config.CO2_STABILITY_THRESHOLD:
                             # CO2 stable, vérifier la durée
                             elapsed = current_time - self.co2_restabilization_start_time
-                            stability_progress = min(100, (elapsed / CO2_constants.STABILITY_DURATION) * 100)
+                            stability_progress = min(100, (elapsed / config.STABILITY_DURATION) * 100)
                             
-                            if elapsed >= CO2_constants.STABILITY_DURATION:
+                            if elapsed >= config.STABILITY_DURATION:
                                 # CO2 restabilisé, passer à l'étape suivante
                                 self.full_protocol_step = 6
                                 self.full_protocol_co2_final = latest_co2  # Mémoriser la valeur CO2 finale
@@ -1974,7 +1974,7 @@ class MeasurementManager:
         """
         Gère le protocole de régénération avec les nouvelles règles :
         1. La détection de restabilisation peut commencer dès le pic détecté
-        2. La température reste à 700°C jusqu'à la fin de constants.REGENERATION_DURATION
+        2. La température reste à 700°C jusqu'à la fin de config.REGENERATION_DURATION
         3. La restabilisation peut se terminer avant ou après le retour à 0°C
         """
         if not self.regeneration_in_progress:
@@ -1996,12 +1996,12 @@ class MeasurementManager:
                 self.co2_base_value = self.values_co2[-1]
                 
                 # Démarrage de la régénération (température à 700°C)
-                self.set_Tcons(str(constants.REGENERATION_TEMP))
+                self.set_Tcons(str(config.REGENERATION_TEMP))
                 
                 return {
                     'active': True,
                     'step': 2,
-                    'message': f"Régénération à {constants.REGENERATION_TEMP}°C démarrée",
+                    'message': f"Régénération à {config.REGENERATION_TEMP}°C démarrée",
                     'progress': 33.3
                 }
             else:
@@ -2009,19 +2009,19 @@ class MeasurementManager:
                     'active': True,
                     'step': 1,
                     'message': "Recherche stabilité CO2 initiale...",
-                    'progress': (min(current_time - self.co2_stability_start_time, CO2_constants.STABILITY_DURATION) 
-                                / CO2_constants.STABILITY_DURATION) * 33.3
+                    'progress': (min(current_time - self.co2_stability_start_time, config.STABILITY_DURATION) 
+                                / config.STABILITY_DURATION) * 33.3
                 }
         
         # Étape 2: Régénération à haute température (durée fixe)
         elif self.regeneration_step == 2:
             elapsed = current_time - self.regeneration_start_time
-            regeneration_completed = elapsed >= constants.REGENERATION_DURATION
+            regeneration_completed = elapsed >= config.REGENERATION_DURATION
             
             # Détection de l'augmentation CO2 (peut se faire à tout moment)
             if not self.co2_increase_detected and self.co2_base_value is not None:
                 current_co2 = self.values_co2[-1]
-                if current_co2 - self.co2_base_value >= constants.CO2_INCREASE_THRESHOLD:  # Seuil d'augmentation
+                if current_co2 - self.co2_base_value >= config.CO2_INCREASE_THRESHOLD:  # Seuil d'augmentation
                     self.co2_increase_detected = True
                     self.regeneration_timestamps['co2_increase_detected'] = current_time - self.start_time_co2_temp_humidity
                     print(f"Augmentation CO2 détectée: {current_co2 - self.co2_base_value:.1f} ppm")
@@ -2046,21 +2046,21 @@ class MeasurementManager:
             if not regeneration_completed:
                 # Maintenir à 700°C jusqu'à la fin de la durée, même si restabilisation détectée
                 if not self.tcons_reduced:
-                    self.set_Tcons(str(constants.REGENERATION_TEMP))
+                    self.set_Tcons(str(config.REGENERATION_TEMP))
                 
-                progress = 33.3 + (elapsed / constants.REGENERATION_DURATION) * 66.7 * 0.5  # Progress jusqu'à 66.6%
+                progress = 33.3 + (elapsed / config.REGENERATION_DURATION) * 66.7 * 0.5  # Progress jusqu'à 66.6%
                 
                 return {
                     'active': True,
                     'step': 2,
-                    'message': f"Régénération en cours ({elapsed:.1f}/{constants.REGENERATION_DURATION}s)" + 
+                    'message': f"Régénération en cours ({elapsed:.1f}/{config.REGENERATION_DURATION}s)" + 
                             (" (restabilisation en cours)" if self.co2_peak_detected else ""),
                     'progress': min(66.6, progress)
                 }
             else:
                 # Durée de régénération écoulée
                 if not self.tcons_reduced:
-                    self.set_Tcons(str(constants.TCONS_LOW))
+                    self.set_Tcons(str(config.TCONS_LOW))
                     self.tcons_reduced = True
                     print("Durée de régénération écoulée - température réduite à 0°C")
                 
@@ -2077,12 +2077,12 @@ class MeasurementManager:
                 else:
                     # Attendre la restabilisation après la fin du chauffage
                     restab_time = current_time - self.co2_restabilization_start_time if self.co2_restabilization_start_time else 0
-                    progress = 75.0 + min(25.0, (restab_time / CO2_constants.STABILITY_DURATION) * 25.0)
+                    progress = 75.0 + min(25.0, (restab_time / config.STABILITY_DURATION) * 25.0)
                     
                     return {
                         'active': True,
                         'step': 3,
-                        'message': f"Attente restabilisation CO2 ({restab_time:.1f}/{CO2_constants.STABILITY_DURATION}s)",
+                        'message': f"Attente restabilisation CO2 ({restab_time:.1f}/{config.STABILITY_DURATION}s)",
                         'progress': progress
                     }
         
@@ -2099,12 +2099,12 @@ class MeasurementManager:
                 }
             else:
                 restab_time = current_time - self.co2_restabilization_start_time if self.co2_restabilization_start_time else 0
-                progress = 75.0 + min(25.0, (restab_time / CO2_constants.STABILITY_DURATION) * 25.0)
+                progress = 75.0 + min(25.0, (restab_time / config.STABILITY_DURATION) * 25.0)
                 
                 return {
                     'active': True,
                     'step': 3,
-                    'message': f"Surveillance restabilisation CO2 ({restab_time:.1f}/{CO2_constants.STABILITY_DURATION}s)",
+                    'message': f"Surveillance restabilisation CO2 ({restab_time:.1f}/{config.STABILITY_DURATION}s)",
                     'progress': progress
                 }
         

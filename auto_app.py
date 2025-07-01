@@ -15,7 +15,7 @@ from devices.keithley_device import KeithleyDevice
 from devices.arduino_device import ArduinoDevice
 from devices.regen_device import RegenDevice
 from core.measurement_manager import MeasurementManager
-from core import constants
+from core.config import config, EXCEL_BASE_DIR
 from data_handlers.excel_handler import ExcelHandler
 from ui.plot_manager import PlotManager
 from utils.helpers import parse_pin_states
@@ -89,7 +89,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         print(f"Using custom save location: {save_location}")
         data_handler = ExcelHandler(mode="auto", base_dir=save_location)
     else:
-        print(f"Using default save location: {constants.EXCEL_BASE_DIR}")
+        print(f"Using default save location: {EXCEL_BASE_DIR}")
         data_handler = ExcelHandler(mode="auto")
     
     # Initialize plots
@@ -353,8 +353,8 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         nonlocal escape_pressed
         # Définir Tcons à 0°C avant de fermer
         try:
-            measurements.set_Tcons(str(constants.TCONS_LOW))
-            print(f"Tcons défini à {constants.TCONS_LOW}°C avant fermeture")
+            measurements.set_Tcons(str(config.TCONS_LOW))
+            print(f"Tcons défini à {config.TCONS_LOW}°C avant fermeture")
         except Exception as e:
             print(f"Erreur lors de la définition de Tcons: {e}")
         

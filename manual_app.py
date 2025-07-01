@@ -17,7 +17,7 @@ from devices.regen_device import RegenDevice
 from core.measurement_manager import MeasurementManager
 from data_handlers.excel_handler import ExcelHandler
 from ui.plot_manager import PlotManager
-from core import constants
+from core.config import config, EXCEL_BASE_DIR
 
 def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_rate=None,
          measure_conductance=1, measure_co2=1, measure_regen=1, auto_save=True, save_data=True,
@@ -255,7 +255,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         print(f"Using custom save location: {save_location}")
         data_handler = ExcelHandler(mode="manual", base_dir=save_location)
     else:
-        print(f"Using default save location: {constants.EXCEL_BASE_DIR}")
+        print(f"Using default save location: {EXCEL_BASE_DIR}")
         data_handler = ExcelHandler(mode="manual")
     
     # Initialize plots
@@ -750,10 +750,9 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
         """Gère la fermeture du programme"""
         nonlocal escape_pressed
         # Définir Tcons à 0°C avant de fermer
-        from core.constants import TCONS_LOW
         try:
-            measurements.set_Tcons(str(TCONS_LOW))
-            print(f"Tcons défini à {TCONS_LOW}°C avant fermeture")
+            measurements.set_Tcons(str(config.TCONS_LOW))
+            print(f"Tcons défini à {config.TCONS_LOW}°C avant fermeture")
         except Exception as e:
             print(f"Erreur lors de la définition de Tcons: {e}")
         
@@ -2268,7 +2267,7 @@ def main(arduino_port=None, arduino_baud_rate=None, other_port=None, other_baud_
             emergency_mode = False
         
         # Adapter l'intervalle de sauvegarde au mode d'urgence
-        backup_interval = constants.AUTOSAVE_INTERVAL if auto_save else float('inf')  # Recalculer à chaque fois
+        backup_interval = config.AUTOSAVE_INTERVAL if auto_save else float('inf')  # Recalculer à chaque fois
         effective_interval = backup_interval / 2 if emergency_mode else backup_interval
         
         # Variables pour suivre la dernière sauvegarde d'urgence

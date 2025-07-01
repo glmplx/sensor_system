@@ -11,7 +11,7 @@ import sys
 import requests
 from urllib.error import URLError
 
-from core import constants
+from core.config import config, EXCEL_BASE_DIR
 
 class MenuUI:
     """Interface utilisateur du menu principal pour le système de capteurs"""
@@ -263,7 +263,7 @@ class MenuUI:
         self.auto_save_check.grid(row=1, column=0, sticky='w', padx=10, pady=5)
 
         # Variable pour stocker le chemin de sauvegarde personnalisé
-        self.save_location_path = tk.StringVar(value=constants.EXCEL_BASE_DIR)
+        self.save_location_path = tk.StringVar(value=EXCEL_BASE_DIR)
 
         # Fonction pour ouvrir le sélecteur de dossier
         def browse_directory():
@@ -484,7 +484,7 @@ class MenuUI:
         custom_save_location = bool(self.custom_save_location_var.get())
 
         # Récupérer le chemin de sauvegarde personnalisé si activé
-        save_location = self.save_location_path.get() if custom_save_location else constants.EXCEL_BASE_DIR
+        save_location = self.save_location_path.get() if custom_save_location else EXCEL_BASE_DIR
 
         # Import and run directly instead of launching a new process
         if getattr(sys, 'frozen', False):
@@ -823,8 +823,8 @@ class ConstantsConfigWindow:
         general_frame.pack(fill=tk.X, expand=1, padx=5, pady=5)
 
         general_params = [
-            ("AUTOSAVE_INTERVAL", "Intervalle sauvegarde auto (s)", constants.AUTOSAVE_INTERVAL, "Intervalle en secondes entre les sauvegardes automatiques"),
-            ("VALVE_DELAY", "Délai vanne (s)", constants.VALVE_DELAY, "Délai d'attente en secondes après opération d'ouverture/fermeture de vanne")
+            ("AUTOSAVE_INTERVAL", "Intervalle sauvegarde auto (s)", config.AUTOSAVE_INTERVAL, "Intervalle en secondes entre les sauvegardes automatiques"),
+            ("VALVE_DELAY", "Délai vanne (s)", config.VALVE_DELAY, "Délai d'attente en secondes après opération d'ouverture/fermeture de vanne")
         ]
 
         for i, (const_name, label_text, current_value, tooltip) in enumerate(general_params):
@@ -848,14 +848,14 @@ class ConstantsConfigWindow:
         conductance_frame.pack(fill=tk.X, expand=1, padx=5, pady=5)
 
         conductance_params = [
-            ("STABILITY_DURATION", "Durée de stabilité (s)", constants.STABILITY_DURATION, "Durée requise en secondes pour considérer la conductance comme stable"),
-            ("INCREASE_SLOPE_MIN", "Pente min. augmentation (µS/s)", constants.INCREASE_SLOPE_MIN, "Seuil minimum pour la pente d'augmentation de conductance"),
-            ("INCREASE_SLOPE_MAX", "Pente max. augmentation (µS/s)", constants.INCREASE_SLOPE_MAX, "Seuil maximum pour la pente d'augmentation de conductance"),
-            ("DECREASE_SLOPE_THRESHOLD", "Seuil pente décroissance (µS/s)", constants.DECREASE_SLOPE_THRESHOLD, "Seuil négatif pour détecter une diminution de conductance"),
-            ("SLIDING_WINDOW", "Durée de la pente glissante (s)", constants.SLIDING_WINDOW, "Durée de l'intervalle pour le calcul de la pente glissante"),
-            ("R0_THRESHOLD", "Seuil R0 (Ohms)", constants.R0_THRESHOLD, "Seuil de résistance R0 en Ohms pour le calcul de conductance"),
-            ("CONDUCTANCE_DECREASE_THRESHOLD", "Seuil décroissance (µS)", constants.CONDUCTANCE_DECREASE_THRESHOLD, "Seuil de décroissance de conductance en µS"),
-            ("KEITHLEY_POLARIZATION_VOLTAGE", "Tension de polarisation (V)", constants.KEITHLEY_POLARIZATION_VOLTAGE, "Tension de polarisation en Volts pour les mesures de conductance")
+            ("STABILITY_DURATION", "Durée de stabilité (s)", config.STABILITY_DURATION, "Durée requise en secondes pour considérer la conductance comme stable"),
+            ("INCREASE_SLOPE_MIN", "Pente min. augmentation (µS/s)", config.INCREASE_SLOPE_MIN, "Seuil minimum pour la pente d'augmentation de conductance"),
+            ("INCREASE_SLOPE_MAX", "Pente max. augmentation (µS/s)", config.INCREASE_SLOPE_MAX, "Seuil maximum pour la pente d'augmentation de conductance"),
+            ("DECREASE_SLOPE_THRESHOLD", "Seuil pente décroissance (µS/s)", config.DECREASE_SLOPE_THRESHOLD, "Seuil négatif pour détecter une diminution de conductance"),
+            ("SLIDING_WINDOW", "Durée de la pente glissante (s)", config.SLIDING_WINDOW, "Durée de l'intervalle pour le calcul de la pente glissante"),
+            ("R0_THRESHOLD", "Seuil R0 (Ohms)", config.R0_THRESHOLD, "Seuil de résistance R0 en Ohms pour le calcul de conductance"),
+            ("CONDUCTANCE_DECREASE_THRESHOLD", "Seuil décroissance (µS)", config.CONDUCTANCE_DECREASE_THRESHOLD, "Seuil de décroissance de conductance en µS"),
+            ("KEITHLEY_POLARIZATION_VOLTAGE", "Tension de polarisation (V)", config.KEITHLEY_POLARIZATION_VOLTAGE, "Tension de polarisation en Volts pour les mesures de conductance")
         ]
 
         for i, (const_name, label_text, current_value, tooltip) in enumerate(conductance_params):
@@ -879,11 +879,11 @@ class ConstantsConfigWindow:
         co2_frame.pack(fill=tk.X, expand=1, padx=5, pady=5)
 
         co2_params = [
-            ("CO2_STABILITY_THRESHOLD", "Seuil stabilité CO2 (ppm)", constants.CO2_STABILITY_THRESHOLD, "Variation maximale en ppm pour considérer le CO2 comme stable"),
-            ("CO2_STABILITY_DURATION", "Durée stabilité CO2 (s)", constants.CO2_STABILITY_DURATION, "Durée en secondes pendant laquelle le CO2 doit être stable"),
-            ("REGENERATION_DURATION", "Durée régénération (s)", constants.REGENERATION_DURATION, "Durée en secondes du maintien à haute température pendant la régénération"),
-            ("CELL_VOLUME", "Volume cellule (L)", constants.CELL_VOLUME, "Volume de la cellule de mesure en litres pour le calcul de masse de carbone"),
-            ("CO2_INCREASE_THRESHOLD", "Seuil augmentation CO2 (ppm)", constants.CO2_INCREASE_THRESHOLD, "Seuil d'augmentation de CO2 en ppm pour déclencher la détection")
+            ("CO2_STABILITY_THRESHOLD", "Seuil stabilité CO2 (ppm)", config.CO2_STABILITY_THRESHOLD, "Variation maximale en ppm pour considérer le CO2 comme stable"),
+            ("CO2_STABILITY_DURATION", "Durée stabilité CO2 (s)", config.CO2_STABILITY_DURATION, "Durée en secondes pendant laquelle le CO2 doit être stable"),
+            ("REGENERATION_DURATION", "Durée régénération (s)", config.REGENERATION_DURATION, "Durée en secondes du maintien à haute température pendant la régénération"),
+            ("CELL_VOLUME", "Volume cellule (L)", config.CELL_VOLUME, "Volume de la cellule de mesure en litres pour le calcul de masse de carbone"),
+            ("CO2_INCREASE_THRESHOLD", "Seuil augmentation CO2 (ppm)", config.CO2_INCREASE_THRESHOLD, "Seuil d'augmentation de CO2 en ppm pour déclencher la détection")
         ]
 
         for i, (const_name, label_text, current_value, tooltip) in enumerate(co2_params):
@@ -907,8 +907,8 @@ class ConstantsConfigWindow:
         temp_frame.pack(fill=tk.X, expand=1, padx=5, pady=5)
 
         temp_params = [
-            ("REGENERATION_TEMP", "Température de régénération (°C)", constants.REGENERATION_TEMP, "Température en °C pour la régénération"),
-            ("TCONS_LOW", "Point de consigne bas (°C)", constants.TCONS_LOW, "Point de consigne basse température en °C")
+            ("REGENERATION_TEMP", "Température de régénération (°C)", config.REGENERATION_TEMP, "Température en °C pour la régénération"),
+            ("TCONS_LOW", "Point de consigne bas (°C)", config.TCONS_LOW, "Point de consigne basse température en °C")
         ]
 
         for i, (const_name, label_text, current_value, tooltip) in enumerate(temp_params):
@@ -948,58 +948,58 @@ class ConstantsConfigWindow:
 
         # Réinitialiser les paramètres généraux
         self.entries["AUTOSAVE_INTERVAL"].delete(0, tk.END)
-        self.entries["AUTOSAVE_INTERVAL"].insert(0, str(constants.AUTOSAVE_INTERVAL))
+        self.entries["AUTOSAVE_INTERVAL"].insert(0, str(config.AUTOSAVE_INTERVAL))
 
         # Réinitialiser les valeurs de conductance
         self.entries["STABILITY_DURATION"].delete(0, tk.END)
-        self.entries["STABILITY_DURATION"].insert(0, str(constants.STABILITY_DURATION))
+        self.entries["STABILITY_DURATION"].insert(0, str(config.STABILITY_DURATION))
 
         self.entries["INCREASE_SLOPE_MIN"].delete(0, tk.END)
-        self.entries["INCREASE_SLOPE_MIN"].insert(0, str(constants.INCREASE_SLOPE_MIN))
+        self.entries["INCREASE_SLOPE_MIN"].insert(0, str(config.INCREASE_SLOPE_MIN))
 
         self.entries["INCREASE_SLOPE_MAX"].delete(0, tk.END)
-        self.entries["INCREASE_SLOPE_MAX"].insert(0, str(constants.INCREASE_SLOPE_MAX))
+        self.entries["INCREASE_SLOPE_MAX"].insert(0, str(config.INCREASE_SLOPE_MAX))
 
         self.entries["DECREASE_SLOPE_THRESHOLD"].delete(0, tk.END)
-        self.entries["DECREASE_SLOPE_THRESHOLD"].insert(0, str(constants.DECREASE_SLOPE_THRESHOLD))
+        self.entries["DECREASE_SLOPE_THRESHOLD"].insert(0, str(config.DECREASE_SLOPE_THRESHOLD))
 
         self.entries["SLIDING_WINDOW"].delete(0, tk.END)
-        self.entries["SLIDING_WINDOW"].insert(0, str(constants.SLIDING_WINDOW))
+        self.entries["SLIDING_WINDOW"].insert(0, str(config.SLIDING_WINDOW))
 
         self.entries["R0_THRESHOLD"].delete(0, tk.END)
-        self.entries["R0_THRESHOLD"].insert(0, str(constants.R0_THRESHOLD))
+        self.entries["R0_THRESHOLD"].insert(0, str(config.R0_THRESHOLD))
 
         self.entries["CONDUCTANCE_DECREASE_THRESHOLD"].delete(0, tk.END)
-        self.entries["CONDUCTANCE_DECREASE_THRESHOLD"].insert(0, str(constants.CONDUCTANCE_DECREASE_THRESHOLD))
+        self.entries["CONDUCTANCE_DECREASE_THRESHOLD"].insert(0, str(config.CONDUCTANCE_DECREASE_THRESHOLD))
         
         self.entries["KEITHLEY_POLARIZATION_VOLTAGE"].delete(0, tk.END)
-        self.entries["KEITHLEY_POLARIZATION_VOLTAGE"].insert(0, str(constants.KEITHLEY_POLARIZATION_VOLTAGE))
+        self.entries["KEITHLEY_POLARIZATION_VOLTAGE"].insert(0, str(config.KEITHLEY_POLARIZATION_VOLTAGE))
 
         # Réinitialiser les valeurs de température
         self.entries["REGENERATION_TEMP"].delete(0, tk.END)
-        self.entries["REGENERATION_TEMP"].insert(0, str(constants.REGENERATION_TEMP))
+        self.entries["REGENERATION_TEMP"].insert(0, str(config.REGENERATION_TEMP))
 
         self.entries["TCONS_LOW"].delete(0, tk.END)
-        self.entries["TCONS_LOW"].insert(0, str(constants.TCONS_LOW))
+        self.entries["TCONS_LOW"].insert(0, str(config.TCONS_LOW))
 
         self.entries["VALVE_DELAY"].delete(0, tk.END)
-        self.entries["VALVE_DELAY"].insert(0, str(constants.VALVE_DELAY))
+        self.entries["VALVE_DELAY"].insert(0, str(config.VALVE_DELAY))
 
         # Réinitialiser les valeurs CO2
         self.entries["CO2_STABILITY_THRESHOLD"].delete(0, tk.END)
-        self.entries["CO2_STABILITY_THRESHOLD"].insert(0, str(constants.CO2_STABILITY_THRESHOLD))
+        self.entries["CO2_STABILITY_THRESHOLD"].insert(0, str(config.CO2_STABILITY_THRESHOLD))
 
         self.entries["CO2_STABILITY_DURATION"].delete(0, tk.END)
-        self.entries["CO2_STABILITY_DURATION"].insert(0, str(constants.CO2_STABILITY_DURATION))
+        self.entries["CO2_STABILITY_DURATION"].insert(0, str(config.CO2_STABILITY_DURATION))
 
         self.entries["REGENERATION_DURATION"].delete(0, tk.END)
-        self.entries["REGENERATION_DURATION"].insert(0, str(constants.REGENERATION_DURATION))
+        self.entries["REGENERATION_DURATION"].insert(0, str(config.REGENERATION_DURATION))
 
         self.entries["CELL_VOLUME"].delete(0, tk.END)
-        self.entries["CELL_VOLUME"].insert(0, str(constants.CELL_VOLUME))
+        self.entries["CELL_VOLUME"].insert(0, str(config.CELL_VOLUME))
 
         self.entries["CO2_INCREASE_THRESHOLD"].delete(0, tk.END)
-        self.entries["CO2_INCREASE_THRESHOLD"].insert(0, str(constants.CO2_INCREASE_THRESHOLD))
+        self.entries["CO2_INCREASE_THRESHOLD"].insert(0, str(config.CO2_INCREASE_THRESHOLD))
 
     def save_values(self):
         """Sauvegarde les valeurs modifiées pour la session en cours et dans les fichiers appropriés"""
@@ -1071,10 +1071,7 @@ class ConstantsConfigWindow:
             for key, value in new_values.items():
                 globals()[key] = value
 
-            # Modifier les constantes dans le module
-            import core.constants
-            for key, value in new_values.items():
-                setattr(core.constants, key, value)
+            # Les valeurs sont maintenant gérées par le fichier JSON via config_manager
             
             # Vérifier si nous sommes en mode exécutable
             from utils.config_manager import is_running_as_executable, save_config
@@ -1088,38 +1085,12 @@ class ConstantsConfigWindow:
                     messagebox.showwarning("Avertissement",
                        "Les paramètres ont été appliqués pour cette session mais n'ont pas pu être sauvegardés dans le fichier de configuration")
             else:
-                # En mode script, sauvegarder dans le fichier constants.py
-                try:
-                    # Chemin du module constants.py
-                    import os
-                    import inspect
-                    constants_file_path = inspect.getfile(core.constants)
-                    
-                    # Lire le contenu actuel du fichier
-                    with open(constants_file_path, 'r', encoding='utf-8') as f:
-                        file_content = f.read()
-                    
-                    # Mettre à jour chaque constante dans le fichier
-                    for key, value in new_values.items():
-                        # Créer un pattern de recherche pour la constante
-                        import re
-                        if isinstance(value, int) or isinstance(value, float):
-                            # Remplacer la valeur numérique
-                            pattern = rf"^{key}\s*=\s*[0-9*\.\s]+.*$"
-                            # Conserver les commentaires éventuels après la valeur
-                            comment_match = re.search(rf"^{key}\s*=\s*[0-9*\.\s]+(.*)$", file_content, re.MULTILINE)
-                            comment = comment_match.group(1) if comment_match else ""
-                            replacement = f"{key} = {value}{comment}"
-                            file_content = re.sub(pattern, replacement, file_content, flags=re.MULTILINE)
-                    
-                    # Écrire le contenu mis à jour dans le fichier
-                    with open(constants_file_path, 'w', encoding='utf-8') as f:
-                        f.write(file_content)
-                    
-                except Exception as file_error:
-                    # En cas d'erreur lors de l'écriture du fichier, informer l'utilisateur mais continuer
-                    messagebox.showwarning("Avertissement", 
-                        f"Les paramètres ont été appliqués pour cette session mais n'ont pas pu être sauvegardés de façon permanente:\n{str(file_error)}")
+                # En mode script, sauvegarder dans le fichier sensor_config.json
+                if save_config(new_values):
+                    success_message += " et sauvegardés dans le fichier sensor_config.json"
+                else:
+                    messagebox.showwarning("Avertissement",
+                       "Les paramètres ont été appliqués pour cette session mais n'ont pas pu être sauvegardés dans le fichier de configuration")
             
             # Afficher un message de succès
             messagebox.showinfo("Succès", success_message)
