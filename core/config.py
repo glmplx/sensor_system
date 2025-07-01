@@ -4,7 +4,26 @@ Charge les paramètres depuis le fichier sensor_config.json.
 """
 import json
 import os
+import sys
 from typing import Any, Dict
+
+def _is_running_as_executable() -> bool:
+    """Détermine si l'application est exécutée en tant qu'exécutable compilé."""
+    return getattr(sys, 'frozen', False)
+
+def _get_config_file_path() -> str:
+    """Obtient le chemin du fichier de configuration selon le mode d'exécution."""
+    if _is_running_as_executable():
+        # En mode exécutable, chercher à côté de l'exécutable
+        if hasattr(sys, '_MEIPASS'):
+            # PyInstaller : chercher dans le dossier temporaire d'extraction
+            return os.path.join(sys._MEIPASS, 'sensor_config.json')
+        else:
+            # Autre : chercher à côté de l'exécutable
+            return os.path.join(os.path.dirname(sys.executable), 'sensor_config.json')
+    else:
+        # En mode script, chercher dans le dossier core/
+        return os.path.join(os.path.dirname(__file__), 'sensor_config.json')
 
 class Config:
     """Gestionnaire de configuration singleton pour charger les paramètres depuis JSON."""
@@ -21,7 +40,7 @@ class Config:
     @classmethod
     def _load_config(cls):
         """Charge la configuration depuis le fichier JSON."""
-        config_path = os.path.join(os.path.dirname(__file__), 'sensor_config.json')
+        config_path = _get_config_file_path()
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 cls._config = json.load(f)

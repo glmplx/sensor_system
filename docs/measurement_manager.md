@@ -36,6 +36,8 @@
 - [`start_full_protocol(self)`](#start_full_protocol)
 - [`manage_full_protocol(self)`](#manage_full_protocol)
 - [`manage_regeneration_protocol(self)`](#manage_regeneration_protocol)
+- [`convert_absolute_to_relative_time(self, absolute_time, measurement_type)`](#convert_absolute_to_relative_time)
+- [`get_regeneration_timestamps_for_graph(self, graph_type)`](#get_regeneration_timestamps_for_graph)
 - [`get_events_dictionary(self)`](#get_events_dictionary)
 
 ---
@@ -426,8 +428,37 @@ def manage_regeneration_protocol(self)
 
 Gère le protocole de régénération avec les nouvelles règles :
 1. La détection de restabilisation peut commencer dès le pic détecté
-2. La température reste à 700°C jusqu'à la fin de REGENERATION_DURATION
+2. La température reste à 700°C jusqu'à la fin de config.REGENERATION_DURATION
 3. La restabilisation peut se terminer avant ou après le retour à 0°C
+
+---
+
+## `convert_absolute_to_relative_time(self, absolute_time, measurement_type)` { #convert_absolute_to_relative_time }
+
+```python
+def convert_absolute_to_relative_time(self, absolute_time, measurement_type)
+```
+
+Convertit un timestamp absolu vers un timestamp relatif à un type de mesure spécifique
+Args:
+absolute_time: Timestamp absolu (time.time())
+measurement_type: 'conductance', 'co2_temp_humidity', ou 'res_temp'
+Returns:
+float: Timestamp relatif au démarrage de ce type de mesure
+
+---
+
+## `get_regeneration_timestamps_for_graph(self, graph_type)` { #get_regeneration_timestamps_for_graph }
+
+```python
+def get_regeneration_timestamps_for_graph(self, graph_type)
+```
+
+Retourne les timestamps de régénération convertis pour un type de graphique spécifique
+Args:
+graph_type: 'co2_temp_humidity' ou 'res_temp'
+Returns:
+dict: Dictionnaire des timestamps convertis pour ce graphique
 
 ---
 

@@ -30,17 +30,24 @@ def create_executable():
     # Define paths
     main_script = os.path.join(current_dir, 'main.py')
     
-    # Create a default configuration file if it doesn't exist
-    from utils.config_manager import get_constants_as_dict, save_config
-    config_data = get_constants_as_dict()
-    config_path = os.path.join(current_dir, 'sensor_config.json')
+    # Utiliser le fichier de configuration existant dans core/
+    core_config_path = os.path.join(current_dir, 'core', 'sensor_config.json')
+    executable_config_path = os.path.join(current_dir, 'sensor_config.json')
     
-    # Si le fichier de configuration existe déjà, ne pas l'écraser
-    if not os.path.exists(config_path):
-        print(f"Creating default configuration file at {config_path}")
-        with open(config_path, 'w', encoding='utf-8') as f:
+    # Copier le fichier de configuration de core/ vers la racine pour l'exécutable
+    if os.path.exists(core_config_path):
+        print(f"Copying configuration file from {core_config_path} to {executable_config_path}")
+        shutil.copy2(core_config_path, executable_config_path)
+    else:
+        # Si le fichier dans core/ n'existe pas, créer un fichier par défaut
+        from utils.config_manager import get_constants_as_dict
+        config_data = get_constants_as_dict()
+        print(f"Creating default configuration file at {executable_config_path}")
+        with open(executable_config_path, 'w', encoding='utf-8') as f:
             import json
             json.dump(config_data, f, indent=2, ensure_ascii=False)
+    
+    config_path = executable_config_path
     
     # Create a temporary file for the spec file
     with tempfile.NamedTemporaryFile(suffix='.spec', delete=False) as temp_file:
@@ -81,6 +88,10 @@ a = Analysis(
     
     spec_content += """    ],
     hiddenimports=[
+        'core',
+        'core.config',
+        'core.measurement_manager',
+        'utils.config_manager',
         'matplotlib',
         'numpy',
         'pandas',
@@ -193,6 +204,12 @@ Cet exécutable contient le systeme complet de capteurs. Il ne nécessite pas d'
         dist_readme = os.path.join(current_dir, 'dist', 'README.md')
         shutil.copy2(readme_path, dist_readme)
         
+        # S'assurer que le fichier de configuration est dans le dossier dist
+        dist_config = os.path.join(current_dir, 'dist', 'sensor_config.json')
+        if os.path.exists(config_path) and not os.path.exists(dist_config):
+            shutil.copy2(config_path, dist_config)
+            print("Copied sensor_config.json to dist folder")
+        
         # Copy other documentation files
         docs_files = {
             'README.md': 'README.md',
@@ -215,6 +232,7 @@ Cet exécutable contient le systeme complet de capteurs. Il ne nécessite pas d'
                 shutil.rmtree(docs_dist_dir)
             shutil.copytree(docs_dir, docs_dist_dir)
             print("Copied docs directory to dist folder")
+        
         
         print("Executable created successfully in the 'dist' folder.")
         print(f"Execute path: {os.path.join(current_dir, 'dist', 'SensorSystem.exe')}")

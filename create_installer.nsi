@@ -36,6 +36,9 @@ Section "Installation principale" SecMain
   ; Copier tous les fichiers de l'exécutable
   File /r "dist\*.*"
   
+  ; S'assurer que le fichier de configuration est présent (normalement inclus dans dist\*.*)
+  ; Le fichier sensor_config.json permet de personnaliser les paramètres
+  
   ; Créer le dossier pour les données Excel
   CreateDirectory "$INSTDIR\donnees_excel"
   

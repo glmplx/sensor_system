@@ -1,10 +1,11 @@
 # Documentation du projet
 
-*Générée automatiquement le 13/05/2025 à 20:38*
+*Générée automatiquement le 01/07/2025 à 14:25*
 
 ## Modules disponibles
 - [arduino_device](arduino_device.md)
 - [auto_app](auto_app.md)
+- [config](config.md)
 - [create_executable](create_executable.md)
 - [create_installer](create_installer.md)
 - [excel_handler](excel_handler.md)

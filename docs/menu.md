@@ -6,14 +6,17 @@
 - [`__init__(self)`](#__init__)
 - [`scan_ports(self)`](#scan_ports)
 - [`refresh_ports(self, show_message=True)`](#refresh_ports)
+- [`toggle_save_options(self, *args)`](#toggle_save_options)
+- [`toggle_location_selector(self, *args)`](#toggle_location_selector)
 - [`setup_ui(self)`](#setup_ui)
-- [`toggle_location_selector(*args)`](#toggle_location_selector)
 - [`browse_directory()`](#browse_directory)
 - [`set_manual_mode(self)`](#set_manual_mode)
 - [`set_auto_mode(self)`](#set_auto_mode)
 - [`check_port_selections(self, arduino_port_str, other_port_str)`](#check_port_selections)
 - [`launch_program(self)`](#launch_program)
 - [`open_documentation(self)`](#open_documentation)
+- [`_open_readme_fallback(self)`](#_open_readme_fallback)
+- [`_open_mkdocs_documentation(self)`](#_open_mkdocs_documentation)
 - [`run_mkdocs_server()`](#run_mkdocs_server)
 - [`check_server_status(attempt=1, max_attempts=10)`](#check_server_status)
 - [`_find_available_port(self, start_port=8000, end_port=8020)`](#_find_available_port)
@@ -68,6 +71,26 @@ dict: Informations sur les ports détectés (pour usage externe)
 
 ---
 
+## `toggle_save_options(self, *args)` { #toggle_save_options }
+
+```python
+def toggle_save_options(self, *args)
+```
+
+Afficher ou masquer les options de sauvegarde en fonction de l'état de save_data_var
+
+---
+
+## `toggle_location_selector(self, *args)` { #toggle_location_selector }
+
+```python
+def toggle_location_selector(self, *args)
+```
+
+Afficher ou masquer le champ de saisie de l'emplacement de sauvegarde
+
+---
+
 ## `setup_ui(self)` { #setup_ui }
 
 ```python
@@ -75,16 +98,6 @@ def setup_ui(self)
 ```
 
 Configurer les éléments de l'interface utilisateur
-
----
-
-## `toggle_location_selector(*args)` { #toggle_location_selector }
-
-```python
-def toggle_location_selector(*args)
-```
-
-Afficher ou masquer le champ de saisie de l'emplacement de sauvegarde
 
 ---
 
@@ -148,6 +161,26 @@ Lancer le mode de programme sélectionné
 
 ```python
 def open_documentation(self)
+```
+
+Lance mkdocs serve ou ouvre le README si échec
+
+---
+
+## `_open_readme_fallback(self)` { #_open_readme_fallback }
+
+```python
+def _open_readme_fallback(self)
+```
+
+Ouvre le README.md comme solution de repli
+
+---
+
+## `_open_mkdocs_documentation(self)` { #_open_mkdocs_documentation }
+
+```python
+def _open_mkdocs_documentation(self)
 ```
 
 Lance mkdocs serve et ouvre la documentation dans un navigateur

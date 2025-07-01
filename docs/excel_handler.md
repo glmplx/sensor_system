@@ -34,7 +34,7 @@ def __init__(self, mode="manual", base_dir=None)
 Initialiser le gestionnaire Excel
 Args:
 mode: Mode de fonctionnement, soit "manual" soit "auto"
-base_dir: Répertoire de base pour les fichiers Excel (par défaut: EXCEL_BASE_DIR)
+base_dir: Répertoire de base pour les fichiers Excel (par défaut: constants.EXCEL_BASE_DIR)
 
 ---
 
